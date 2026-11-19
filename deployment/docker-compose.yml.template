@@ -1,0 +1,11 @@
+services:
+  mait_bridge:
+    image: {{ IMAGE_NAME }}
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - APP_KEY=$APP_KEY
+      - HEALTHCHECK_PORT=$HEALTHCHECK_PORT
+    devices:
+      # The base radio's serial port. Read-only: the bridge only listens.
+      - "{{ serial_port | default('/dev/ttyAMA0') }}:{{ serial_port | default('/dev/ttyAMA0') }}:r"

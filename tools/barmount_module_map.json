@@ -1,0 +1,532 @@
+[
+  {
+    "module": 10,
+    "name": "Existing Tank 1",
+    "device": "248969125739677702",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "flood_gate_1"
+      },
+      {
+        "channel": 3,
+        "field": "tank_level"
+      },
+      {
+        "channel": 14,
+        "field": "flow_volume"
+      },
+      {
+        "channel": 15,
+        "field": "flow_rate"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 20,
+    "name": "Existing Tank 2",
+    "device": "248969136409987084",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "flood_gate_1"
+      },
+      {
+        "channel": 3,
+        "field": "tank_level"
+      },
+      {
+        "channel": 14,
+        "field": "flow_volume"
+      },
+      {
+        "channel": 15,
+        "field": "flow_rate"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 30,
+    "name": "New Tank 1",
+    "device": "248969141648672768",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "flood_gate_1"
+      },
+      {
+        "channel": 3,
+        "field": "tank_level"
+      },
+      {
+        "channel": 14,
+        "field": "flow_volume"
+      },
+      {
+        "channel": 15,
+        "field": "flow_rate"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 40,
+    "name": "New Tank 2",
+    "device": "248969146669254658",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "flood_gate_1"
+      },
+      {
+        "channel": 3,
+        "field": "tank_level"
+      },
+      {
+        "channel": 14,
+        "field": "flow_volume"
+      },
+      {
+        "channel": 15,
+        "field": "flow_rate"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 50,
+    "name": "Turkeys Nest",
+    "device": "248969152092489731",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "valve_1"
+      },
+      {
+        "channel": 3,
+        "field": "valve_3"
+      },
+      {
+        "channel": 5,
+        "field": "tank_level"
+      },
+      {
+        "channel": 12,
+        "field": "flow_volume_2"
+      },
+      {
+        "channel": 13,
+        "field": "flow_rate_2"
+      },
+      {
+        "channel": 14,
+        "field": "flow_volume"
+      },
+      {
+        "channel": 15,
+        "field": "flow_rate"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 60,
+    "name": "Eastern Pivot",
+    "device": "248969157800937480",
+    "channels": [
+      {
+        "channel": 2,
+        "field": "run"
+      },
+      {
+        "channel": 3,
+        "field": "forward"
+      },
+      {
+        "channel": 5,
+        "field": "reverse"
+      },
+      {
+        "channel": 9,
+        "field": "safety"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 70,
+    "name": "Fert Pump East",
+    "device": "248969162972514317",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "pump_1"
+      },
+      {
+        "channel": 2,
+        "field": "pump_2"
+      },
+      {
+        "channel": 13,
+        "field": "flow_volume"
+      },
+      {
+        "channel": 14,
+        "field": "flow_rate"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 80,
+    "name": "Eastern Pivot tracker",
+    "device": "248969157800937480",
+    "channels": [
+      {
+        "channel": 3,
+        "field": "latitude"
+      },
+      {
+        "channel": 4,
+        "field": "longitude"
+      },
+      {
+        "channel": 5,
+        "field": "altitude"
+      },
+      {
+        "channel": 6,
+        "field": "gps_time",
+        "conversion": "UTC hhmmss to epoch ms"
+      },
+      {
+        "channel": 7,
+        "field": "gps_fix"
+      },
+      {
+        "channel": 8,
+        "field": "satellites"
+      },
+      {
+        "channel": 9,
+        "field": "hdop"
+      },
+      {
+        "channel": 10,
+        "field": "water_pressure"
+      },
+      {
+        "channel": 17,
+        "field": "tracker_battery_v"
+      }
+    ],
+    "link_prefix": "tracker_"
+  },
+  {
+    "module": 90,
+    "name": "Western Pivot",
+    "device": "248969174200666118",
+    "channels": [
+      {
+        "channel": 2,
+        "field": "run"
+      },
+      {
+        "channel": 3,
+        "field": "forward"
+      },
+      {
+        "channel": 5,
+        "field": "reverse"
+      },
+      {
+        "channel": 9,
+        "field": "safety"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 100,
+    "name": "Fert Pump West",
+    "device": "248969179355465740",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "pump_1"
+      },
+      {
+        "channel": 2,
+        "field": "pump_2"
+      },
+      {
+        "channel": 13,
+        "field": "flow_volume"
+      },
+      {
+        "channel": 14,
+        "field": "flow_rate"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 110,
+    "name": "Western Pivot tracker",
+    "device": "248969174200666118",
+    "channels": [
+      {
+        "channel": 3,
+        "field": "latitude"
+      },
+      {
+        "channel": 4,
+        "field": "longitude"
+      },
+      {
+        "channel": 5,
+        "field": "altitude"
+      },
+      {
+        "channel": 6,
+        "field": "gps_time",
+        "conversion": "UTC hhmmss to epoch ms"
+      },
+      {
+        "channel": 7,
+        "field": "gps_fix"
+      },
+      {
+        "channel": 8,
+        "field": "satellites"
+      },
+      {
+        "channel": 9,
+        "field": "hdop"
+      },
+      {
+        "channel": 10,
+        "field": "water_pressure"
+      },
+      {
+        "channel": 17,
+        "field": "tracker_battery_v"
+      }
+    ],
+    "link_prefix": "tracker_"
+  },
+  {
+    "module": 120,
+    "name": "Diesel Pumps",
+    "device": "248969691194754817",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "eastern_pump"
+      },
+      {
+        "channel": 3,
+        "field": "western_pump"
+      },
+      {
+        "channel": 9,
+        "field": "channel_level"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 130,
+    "name": "Eastern Pump",
+    "device": "248969693098968836",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "pressure_1"
+      },
+      {
+        "channel": 2,
+        "field": "pressure_2"
+      },
+      {
+        "channel": 3,
+        "field": "tank_level"
+      },
+      {
+        "channel": 6,
+        "field": "modbus_6"
+      },
+      {
+        "channel": 7,
+        "field": "modbus_7"
+      },
+      {
+        "channel": 8,
+        "field": "modbus_8"
+      },
+      {
+        "channel": 9,
+        "field": "modbus_9"
+      },
+      {
+        "channel": 10,
+        "field": "modbus_10"
+      },
+      {
+        "channel": 11,
+        "field": "modbus_11"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 140,
+    "name": "Western Pump",
+    "device": "248969694634084110",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "pressure_1"
+      },
+      {
+        "channel": 2,
+        "field": "pressure_2"
+      },
+      {
+        "channel": 7,
+        "field": "modbus_7"
+      },
+      {
+        "channel": 8,
+        "field": "modbus_8"
+      },
+      {
+        "channel": 9,
+        "field": "modbus_9"
+      },
+      {
+        "channel": 10,
+        "field": "modbus_10"
+      },
+      {
+        "channel": 11,
+        "field": "modbus_11"
+      },
+      {
+        "channel": 12,
+        "field": "modbus_12"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 150,
+    "name": "Connors Repeater",
+    "device": "248969696542492416",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "valve_29"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 160,
+    "name": "Connors River Pump",
+    "device": "248969697825949449",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "pump_call"
+      },
+      {
+        "channel": 13,
+        "field": "flow_volume"
+      },
+      {
+        "channel": 14,
+        "field": "flow_rate"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 300,
+    "name": "Main Office Tank",
+    "device": "248969699172321036",
+    "channels": [
+      {
+        "channel": 3,
+        "field": "tank_level"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 310,
+    "name": "Main Office Fill Pump",
+    "device": "248969700854236933",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "pump_1"
+      },
+      {
+        "channel": 2,
+        "field": "pump_2"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  }
+]

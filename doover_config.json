@@ -1,0 +1,49 @@
+{
+    "mait_bridge": {
+        "name": "mait_bridge",
+        "display_name": "MAIT Bridge",
+        "type": "DEV",
+        "visibility": "PUB",
+        "allow_many": false,
+        "description": "Connects a Doovit to a MAIT iNTELLiNet radio network and relays every module's readings to Doover through MAIT Bridge Cloud.",
+        "icon_url": "https://cdn.jsdelivr.net/gh/getdoover/app-icons@dbdb7611ba3992fb4eea7965477c4ab2a3213525/icons/mait_bridge.png",
+        "long_description": "docs/mait_bridge.md",
+        "depends_on": [
+            "platform_interface"
+        ],
+        "organisation_id": 93957122026437134,
+        "image_name": "registry.doover.com/apps/mait_bridge:main",
+        "build_args": "--platform linux/amd64,linux/arm64",
+        "export_config_command": "export-config-bridge",
+        "export_ui_command": "export-ui-bridge",
+        "repository_url": "https://github.com/getdoover/mait-bridge",
+        "has_ui": true
+    },
+    "mait_bridge_cloud": {
+        "name": "mait_bridge_cloud",
+        "display_name": "MAIT Bridge Cloud",
+        "type": "PRO",
+        "visibility": "PUB",
+        "allow_many": false,
+        "description": "Fans a MAIT radio bridge's module readings out to one Doover device per site asset, and forwards those devices' commands and settings back to the bridge.",
+        "icon_url": "https://cdn.jsdelivr.net/gh/getdoover/app-icons@dbdb7611ba3992fb4eea7965477c4ab2a3213525/icons/mait_bridge_cloud.png",
+        "long_description": "docs/mait_bridge_cloud.md",
+        "depends_on": [],
+        "organisation_id": 93957122026437134,
+        "export_config_command": "export-config-cloud",
+        "export_ui_command": "export-ui-cloud",
+        "lambda_config": {
+            "Environment": {},
+            "Runtime": "python3.13",
+            "Timeout": 120,
+            "Handler": "src.mait_bridge_cloud.handler",
+            "MemorySize": 256,
+            "Architectures": [
+                "arm64"
+            ]
+        },
+        "repository_url": "https://github.com/getdoover/mait-bridge",
+        "data_access": "read_write",
+        "has_ui": true
+    }
+}

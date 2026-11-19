@@ -1,0 +1,8 @@
+.venv
+.git
+.github
+packages_export
+package.zip
+requirements.txt
+tests
+tools

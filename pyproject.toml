@@ -1,0 +1,35 @@
+[project]
+name = "mait-bridge"
+version = "0.1.0"
+description = "MAIT radio bridge for Doover: the Doovit app and its cloud processor"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydoover>=1.18.8",
+]
+
+[project.scripts]
+doover-app-run = "mait_bridge:main"
+export-config-bridge = "mait_bridge.app_config:export"
+export-ui-bridge = "mait_bridge.app_ui:export"
+export-config-cloud = "mait_bridge_cloud.app_config:export"
+export-ui-cloud = "mait_bridge_cloud.app_ui:export"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mait_bridge", "src/mait_bridge_cloud"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
