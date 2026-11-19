@@ -512,8 +512,50 @@
     ]
   },
   {
+    "module": 170,
+    "name": "Big Dam",
+    "device": "249066722114438927",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "valve_1"
+      },
+      {
+        "channel": 3,
+        "field": "valve_3"
+      },
+      {
+        "channel": 5,
+        "field": "valve_5"
+      },
+      {
+        "channel": 7,
+        "field": "valve_7"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
+    "module": 190,
+    "name": "Field Unit",
+    "device": "249066726690424578",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "valve_35"
+      },
+      {
+        "channel": 17,
+        "field": "battery_v"
+      }
+    ]
+  },
+  {
     "module": 300,
-    "name": "Main Office Tank",
+    "name": "Office Tank",
     "device": "248969699172321036",
     "channels": [
       {
@@ -528,8 +570,8 @@
   },
   {
     "module": 310,
-    "name": "Main Office Fill Pump",
-    "device": "248969700854236933",
+    "name": "Office Tank fill pumps",
+    "device": "248969699172321036",
     "channels": [
       {
         "channel": 1,
@@ -541,8 +583,9 @@
       },
       {
         "channel": 17,
-        "field": "battery_v"
+        "field": "fill_pump_battery_v"
       }
-    ]
+    ],
+    "link_prefix": "fill_pump_"
   }
 ]
