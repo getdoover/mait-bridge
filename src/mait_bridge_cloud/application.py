@@ -119,16 +119,20 @@ class MaitBridgeCloudApplication(Application):
 
         errors: list[str] = []
         per_device: dict[str, list[tuple[bridge.ModuleMapping, dict, int]]] = {}
+        heard: dict[int, int] = {}
         for report in reports:
             module = int(report["module"])
-            mapping = self.module_index.get(module)
-            if mapping is None:
+            entries = self.module_index.get(module)
+            if not entries:
                 errors.append(f"Module {module} is not in the module map")
                 continue
             heard_ms = bridge._int(report.get("heard_ts")) or now_ms
-            per_device.setdefault(mapping.device_id, []).append(
-                (mapping, report, heard_ms)
-            )
+            heard[module] = max(heard_ms, heard.get(module, 0))
+            # A module split across devices fans out to every entry for it.
+            for mapping in entries:
+                per_device.setdefault(mapping.device_id, []).append(
+                    (mapping, report, heard_ms)
+                )
 
         results = await asyncio.gather(
             *(
@@ -139,11 +143,10 @@ class MaitBridgeCloudApplication(Application):
         for problems in results:
             errors.extend(problems)
 
-        for items in per_device.values():
-            for mapping, _, heard_ms in items:
-                key = module_heard_key(mapping.module)
-                if heard_ms > (self.get_tag(key) or 0):
-                    await self.set_tag(key, heard_ms)
+        for module, heard_ms in heard.items():
+            key = module_heard_key(module)
+            if heard_ms > (self.get_tag(key) or 0):
+                await self.set_tag(key, heard_ms)
 
         await self._set("last_uplink", now_ms)
         await self._set("devices_mapped", len(self.devices))
@@ -189,8 +192,12 @@ class MaitBridgeCloudApplication(Application):
                 log.warning("io_state aggregate on %s failed: %s", device_id, exc)
                 problems.append(f"{label}: state not saved ({_short(exc)})")
 
-        if getattr(self.config.mark_online, "value", True) is not False:
-            heard_ms = max(h for _, _, h in items)
+        # Only the device's own module(s) mark it online, so a module that
+        # lends it one channel cannot keep it online when its own is silent.
+        online_modules = bridge.online_modules(self.mappings, device_id)
+        heard_times = [h for m, _, h in items if m.module in online_modules]
+        if heard_times and getattr(self.config.mark_online, "value", True) is not False:
+            heard_ms = max(heard_times)
             try:
                 await self._mark_online(agent, heard_ms, now_ms)
             except Exception as exc:  # noqa: BLE001
@@ -321,8 +328,8 @@ class MaitBridgeCloudApplication(Application):
 
     async def refresh_status(self, now_ms: int):
         heard = {
-            str(m.module): self.get_tag(module_heard_key(m.module))
-            for m in self.mappings
+            str(module): self.get_tag(module_heard_key(module))
+            for module in bridge.mapped_modules(self.mappings)
         }
         text, fresh, expected = bridge.modules_summary(
             self.mappings,

@@ -64,10 +64,11 @@ def test_parse_defaults_and_problems():
             "junk",
         ]
     )
-    assert [x.module for x in m] == [10, 60, 80]
+    # A repeated module number is a further entry for it, not a problem.
+    assert [x.module for x in m] == [10, 60, 80, 10]
     assert m[0].channels[1].multiplier == 1.0 and m[0].channels[1].offset == 0.0
     assert m[2].link_prefix == "tracker_"
-    assert len(problems) == 3
+    assert len(problems) == 2
     assert bridge.parse_module_map(None) == ([], [])
 
 
@@ -216,3 +217,135 @@ def test_status_texts():
         m, {"10": 200 * 60_000, "60": 1}, 200 * 60_000, 120
     )
     assert (text, fresh, expected) == ("2 of 3 heard (1 stale)", 1, 3)
+
+
+# -- one module split across several devices ----------------------------------
+
+EAST = "248969693098968836"
+WEST = "248969694634084110"
+CHANNEL = "248969691194754817"
+
+SPLIT_MAP = [
+    {
+        "module": 120,
+        "name": "Eastern Diesel Pump start",
+        "device": EAST,
+        "include_link": False,
+        "channels": [{"channel": 1, "field": "pump_start"}],
+    },
+    {
+        "module": 130,
+        "name": "Eastern Diesel Pump",
+        "device": EAST,
+        "channels": [
+            {"channel": 1, "field": "pressure_1"},
+            {"channel": 17, "field": "battery_v"},
+        ],
+    },
+    {
+        "module": 120,
+        "name": "Western Diesel Pump start",
+        "device": WEST,
+        "include_link": False,
+        "channels": [{"channel": 3, "field": "pump_start"}],
+    },
+    {
+        "module": 140,
+        "device": WEST,
+        "channels": [
+            {"channel": 1, "field": "pressure_1"},
+            {"channel": 17, "field": "battery_v"},
+        ],
+    },
+    {
+        "module": 120,
+        "name": "Pump Channel",
+        "device": CHANNEL,
+        "channels": [
+            {"channel": 9, "field": "channel_level"},
+            {"channel": 17, "field": "battery_v"},
+        ],
+    },
+]
+
+
+def split_mappings():
+    m, problems = bridge.parse_module_map(SPLIT_MAP)
+    assert problems == []
+    return m
+
+
+def test_split_module_parsed_and_indexed():
+    m = split_mappings()
+    index = bridge.by_module(m)
+    assert [e.device_id for e in index[120]] == [EAST, WEST, CHANNEL]
+    assert [e.device_id for e in index[130]] == [EAST]
+    assert bridge.mapped_modules(m) == [120, 130, 140]
+    assert bridge.mapped_devices(m) == [EAST, WEST, CHANNEL]
+    assert bridge.module_label(m, 120) == (
+        "Eastern Diesel Pump start / Western Diesel Pump start / Pump Channel"
+    )
+    assert bridge.module_label(m, 140) == ""
+
+
+def test_split_module_io_state_per_entry():
+    report = {
+        "module": 120,
+        "channels": {"1": 1, "3": 0, "9": 7.5, "17": 12.6},
+        "link": {"success_pct": 90, "retries": 0, "route": []},
+        "heard_ts": 1000,
+    }
+    east, west, channel = bridge.by_module(split_mappings())[120]
+    assert bridge.build_io_state(east, report, 2000) == {"pump_start": 1}
+    assert bridge.build_io_state(west, report, 2000) == {"pump_start": 0}
+    assert bridge.build_io_state(channel, report, 2000) == {
+        "channel_level": 7.5,
+        "battery_v": 12.6,
+        "link_success_pct": 90.0,
+        "retries": 0,
+        "route": "Base → 120",
+        "last_heard": 1000,
+    }
+
+
+def test_split_module_downlink_reverse_map():
+    m = split_mappings()
+    cmd = {"command": "start", "target": "pump_start"}
+    east, _ = bridge.command_downlink(m, EAST, cmd, 1)
+    west, _ = bridge.command_downlink(m, WEST, cmd, 1)
+    assert (east["module"], east["channel"]) == (120, 1)
+    assert (west["module"], west["channel"]) == (120, 3)
+    # Same field name on two modules of one device: each resolves to its own.
+    pressure, _ = bridge.command_downlink(
+        m, EAST, {"command": "x", "target": "pressure_1"}, 1
+    )
+    assert (pressure["module"], pressure["channel"]) == (130, 1)
+    level, _ = bridge.command_downlink(
+        m, CHANNEL, {"command": "x", "target": "channel_level"}, 1
+    )
+    assert (level["module"], level["channel"]) == (120, 9)
+    # A field of the module that belongs to another device is not this device's.
+    none, problem = bridge.command_downlink(
+        m, EAST, {"command": "x", "target": "channel_level"}, 1
+    )
+    assert none is None and "channel_level" in problem
+
+    settings = bridge.settings_downlink(m, EAST, {}, 1)
+    assert settings["modules"] == [120, 130]
+    assert settings["targets"] == {
+        "pump_start": {"module": 120, "channel": 1},
+        "pressure_1": {"module": 130, "channel": 1},
+        "battery_v": {"module": 130, "channel": 17},
+    }
+
+
+def test_split_module_counts_once_and_online_modules():
+    m = split_mappings()
+    text, fresh, expected = bridge.modules_summary(
+        m, {"120": 100, "130": 100}, 100, 120
+    )
+    assert (text, fresh, expected) == ("2 of 3 heard", 2, 3)
+    assert bridge.online_modules(m, EAST) == {130}
+    assert bridge.online_modules(m, CHANNEL) == {120}
+    lent_only = [x for x in m if x.module == 120 and not x.include_link]
+    assert bridge.online_modules(lent_only, EAST) == {120}

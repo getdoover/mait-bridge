@@ -1,7 +1,9 @@
 """Pure logic of the cloud half of the bridge: no I/O, no clock reads.
 
 Uplink: one module report (from the Doovit's uplink channel) becomes one
-``io_state`` message for the device the module is mapped to.
+``io_state`` message for every device the module is mapped to. A module may be
+split across several devices (each map entry takes its own subset of channels),
+and several modules may feed one device.
 
 Downlink: a command or a settings change on a mapped device becomes one message
 for the Doovit's downlink channel, with the generic output ids (``target``)
@@ -73,12 +75,12 @@ def _float(value: Any, default: float) -> float:
 def parse_module_map(raw: Any) -> tuple[list[ModuleMapping], list[str]]:
     """The module map from install config, plus a list of problems found.
 
-    Entries without a module number or a device are dropped with a problem;
-    a module number listed twice keeps its first entry.
+    Entries without a module number or a device are dropped with a problem.
+    A module number may appear in several entries, each sending its own
+    channels to its own device.
     """
     mappings: list[ModuleMapping] = []
     problems: list[str] = []
-    seen: set[int] = set()
     if not isinstance(raw, list):
         return mappings, problems
 
@@ -94,11 +96,6 @@ def parse_module_map(raw: Any) -> tuple[list[ModuleMapping], list[str]]:
         if not device_id.isdigit():
             problems.append(f"Module {module} has no target device")
             continue
-        if module in seen:
-            problems.append(f"Module {module} is mapped twice; the first entry is used")
-            continue
-        seen.add(module)
-
         channels: list[ChannelMapping] = []
         used_fields: set[str] = set()
         for ch in entry.get("channels") or []:
@@ -142,8 +139,38 @@ def parse_module_map(raw: Any) -> tuple[list[ModuleMapping], list[str]]:
     return mappings, problems
 
 
-def by_module(mappings: list[ModuleMapping]) -> dict[int, ModuleMapping]:
-    return {m.module: m for m in mappings}
+def by_module(mappings: list[ModuleMapping]) -> dict[int, list[ModuleMapping]]:
+    """module -> every map entry for it, in map order."""
+    out: dict[int, list[ModuleMapping]] = {}
+    for m in mappings:
+        out.setdefault(m.module, []).append(m)
+    return out
+
+
+def mapped_modules(mappings: list[ModuleMapping]) -> list[int]:
+    """Module numbers, in first-mapped order, without repeats."""
+    out: list[int] = []
+    for m in mappings:
+        if m.module not in out:
+            out.append(m.module)
+    return out
+
+
+def module_label(mappings: list[ModuleMapping], module: int) -> str:
+    """The labels of a module's entries, joined: 'Diesel Pumps / Eastern Diesel Pump'."""
+    names: list[str] = []
+    for m in mappings:
+        if m.module == module and m.name and m.name not in names:
+            names.append(m.name)
+    return " / ".join(names)
+
+
+def online_modules(mappings: list[ModuleMapping], device_id: str) -> set[int]:
+    """The modules whose being heard marks a device online: those publishing
+    link fields to it, or, when none does, every module that feeds it."""
+    feeding = [m for m in mappings if m.device_id == str(device_id)]
+    with_link = {m.module for m in feeding if m.include_link}
+    return with_link or {m.module for m in feeding}
 
 
 def mapped_devices(mappings: list[ModuleMapping]) -> list[str]:
@@ -278,7 +305,7 @@ def device_targets(mappings: list[ModuleMapping], device_id: str) -> dict[str, d
 
 
 def device_modules(mappings: list[ModuleMapping], device_id: str) -> list[int]:
-    return [m.module for m in mappings if m.device_id == str(device_id)]
+    return mapped_modules([m for m in mappings if m.device_id == str(device_id)])
 
 
 def is_command(data: Any) -> bool:
@@ -342,11 +369,13 @@ def bridge_status(last_uplink_ms: int | None, now_ms: int, timeout_min: float) -
 def modules_summary(
     mappings: list[ModuleMapping], heard: dict[str, int], now_ms: int, stale_min: float
 ) -> tuple[str, int, int]:
-    """'N of M heard (K stale)' plus the fresh count and the expected count."""
-    expected = len(mappings)
+    """'N of M heard (K stale)' plus the fresh count and the expected count.
+    A module split across several devices counts once."""
+    modules = mapped_modules(mappings)
+    expected = len(modules)
     fresh = stale = 0
-    for m in mappings:
-        ts = heard.get(str(m.module))
+    for module in modules:
+        ts = heard.get(str(module))
         if not ts:
             continue
         if (now_ms - ts) / 60_000 > stale_min:

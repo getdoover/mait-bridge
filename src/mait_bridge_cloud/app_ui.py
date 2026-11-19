@@ -8,7 +8,7 @@ from pydoover import ui
 
 from .app_tags import MaitBridgeCloudTags, module_heard_key
 from .app_config import plain
-from .bridge import parse_module_map
+from .bridge import mapped_modules, module_label, parse_module_map
 
 
 class MaitBridgeCloudUI(ui.UI):
@@ -77,15 +77,18 @@ class MaitBridgeCloudUI(ui.UI):
             raw = plain(self.config.modules)
         mappings, _ = parse_module_map(raw)
         if mappings:
-            children = [
-                ui.Timestamp(
-                    f"{m.module} · {m.name}" if m.name else f"Module {m.module}",
-                    name=f"m{m.module}_heard",
-                    value=ui.tag_ref(module_heard_key(m.module), "number", None),
-                    position=index + 1,
+            # One row per module, even when it is split across several devices.
+            children = []
+            for index, module in enumerate(sorted(mapped_modules(mappings))):
+                label = module_label(mappings, module)
+                children.append(
+                    ui.Timestamp(
+                        f"{module} · {label}" if label else f"Module {module}",
+                        name=f"m{module}_heard",
+                        value=ui.tag_ref(module_heard_key(module), "number", None),
+                        position=index + 1,
+                    )
                 )
-                for index, m in enumerate(sorted(mappings, key=lambda m: m.module))
-            ]
             self.add_element(
                 ui.Submodule(
                     "Modules Last Heard",

@@ -52,8 +52,10 @@ One message per publish interval, holding every module heard since the last one:
 
 ### Fan-out: `io_state` on each module device (MAIT Bridge Cloud → device apps)
 
-For every module report, MAIT Bridge Cloud writes one `io_state` message to the module's target device and
-merges the same fields into that device's `io_state` aggregate:
+For every module report, MAIT Bridge Cloud writes one `io_state` message to each device the module is
+mapped to and merges the same fields into that device's `io_state` aggregate. A module can be split across
+several devices (one module-map entry per device, each with its own channels), and several modules can
+feed one device:
 
 ```json
 {"flood_gate_1": 0, "tank_level": 9.007, "flow_volume": 0, "flow_rate": 0, "battery_v": 13.0,
@@ -62,8 +64,9 @@ merges the same fields into that device's `io_state` aggregate:
 
 Mapped fields are `raw × multiplier + offset`. The link fields (`link_success_pct`, `retries`, `route`,
 `last_heard`) can carry a prefix, so a second module on the same device (a GPS tracker on a pivot) does
-not overwrite the main module's link health. Each target device's connection status is refreshed to the
-time its module was heard.
+not overwrite the main module's link health; an entry that only lends a device a channel or two usually
+publishes no link fields at all. Each target device's connection status is refreshed to the time its own
+module was heard (the entries publishing link fields to it, or every entry when none does).
 
 ### Downlink: `mait_downlink` on the Doovit (MAIT Bridge Cloud → MAIT Bridge)
 
@@ -86,7 +89,9 @@ A change to a module device's `control_settings` aggregate (the settings the edg
 ```
 
 `module` / `channel` (and `targets` for settings) translate the generic output ids back to radio addresses,
-using the module map in reverse: a command's `target` is the field name the output is published under.
+using the module map in reverse: a command's `target` is the field name the output is published under on
+that device, so the same field name on two devices (`pump_start` on two pumps sharing one module) resolves
+to each device's own module and channel.
 Replies the edge writes back to `io_commands` (no `command` key) are not forwarded. Settings are
 forwarded only when they change.
 

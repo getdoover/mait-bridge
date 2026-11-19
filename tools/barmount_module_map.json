@@ -346,17 +346,9 @@
   },
   {
     "module": 120,
-    "name": "Diesel Pumps",
+    "name": "Pump Channel",
     "device": "248969691194754817",
     "channels": [
-      {
-        "channel": 1,
-        "field": "eastern_pump"
-      },
-      {
-        "channel": 3,
-        "field": "western_pump"
-      },
       {
         "channel": 9,
         "field": "channel_level"
@@ -368,8 +360,20 @@
     ]
   },
   {
+    "module": 120,
+    "name": "Eastern Diesel Pump start",
+    "device": "248969693098968836",
+    "channels": [
+      {
+        "channel": 1,
+        "field": "pump_start"
+      }
+    ],
+    "include_link": false
+  },
+  {
     "module": 130,
-    "name": "Eastern Pump",
+    "name": "Eastern Diesel Pump",
     "device": "248969693098968836",
     "channels": [
       {
@@ -415,8 +419,20 @@
     ]
   },
   {
+    "module": 120,
+    "name": "Western Diesel Pump start",
+    "device": "248969694634084110",
+    "channels": [
+      {
+        "channel": 3,
+        "field": "pump_start"
+      }
+    ],
+    "include_link": false
+  },
+  {
     "module": 140,
-    "name": "Western Pump",
+    "name": "Western Diesel Pump",
     "device": "248969694634084110",
     "channels": [
       {

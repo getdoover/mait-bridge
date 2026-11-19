@@ -23,7 +23,9 @@ through it to the bridge.
 
 ### Module Map
 
-One entry per radio module:
+One entry per radio module and target device. A module whose channels belong to different things (one
+module wired to two pumps' start relays and a channel level sensor) gets one entry per device, each with
+its own channels; several modules may also feed one device:
 
 | Setting | Meaning |
 |---|---|
@@ -31,7 +33,7 @@ One entry per radio module:
 | Label | Optional name shown on the bridge page |
 | Target Device | The Doover device that receives the module's readings. Several modules may feed one device |
 | Channel Mappings | Channel → field, with an optional multiplier, offset and conversion. Published value = raw × multiplier + offset. The conversion "UTC hhmmss to epoch ms" turns a GPS time of day into a timestamp |
-| Publish Link Fields | Also publish the module's link health |
+| Publish Link Fields | Also publish the module's link health. Turn off on an entry that only lends a device a few channels, so it does not overwrite the link health of the device's own module. A device is marked online by the entries that publish link fields to it (or by every entry, if none does) |
 | Link Field Prefix | Prefix for the link fields of a second module on the same device, e.g. `tracker_` |
 
 A command's `target` is matched against the field names of the device's mappings, so an output published
@@ -57,7 +59,7 @@ as `valve_1` is commanded as `valve_1`.
 - **Bridge Status**: receiving, waiting, or how long since the last uplink.
 - **Last Uplink**, **Modules** (heard of expected, and how many are stale), **Devices Mapped**.
 - **Last Downlink** and what it was.
-- **Modules Last Heard**: one row per mapped module.
+- **Modules Last Heard**: one row per mapped module, even when it is split across several devices.
 - A warning lists problems: a module that is not in the map, a device the app may not write to, a command
   for an output that is not mapped.
 

@@ -77,8 +77,9 @@ class ModuleMapConfig(config.Object):
         "Target Device",
         name="device",
         description=(
-            "Device that receives this module's readings. Several modules may "
-            "feed the same device."
+            "Device that receives this entry's channels. Several modules may "
+            "feed the same device, and one module may be split across several "
+            "devices by giving it one entry per device."
         ),
         position=3,
     )
@@ -95,7 +96,8 @@ class ModuleMapConfig(config.Object):
         name="include_link",
         description=(
             "Also publish link_success_pct, retries, route and last_heard for "
-            "this module."
+            "this module. Turn off on an entry that only lends a device a few "
+            "channels; only entries with link fields mark their device online."
         ),
         default=True,
         position=5,

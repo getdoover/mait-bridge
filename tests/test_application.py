@@ -298,3 +298,80 @@ async def test_empty_config_is_quiet():
     await app.on_message_create(event(DOOVIT, "mait_uplink", UPLINK))
     assert app.get_tag("modules_text") == "No modules mapped"
     assert app.get_tag("bridge_status") == "Receiving"
+
+
+EAST = "248969693098968836"
+WEST = "248969694634084110"
+CHANNEL = "248969691194754817"
+
+SPLIT_CONFIG = {
+    "modules": [
+        {
+            "module": 120,
+            "device": EAST,
+            "include_link": False,
+            "channels": [{"channel": 1, "field": "pump_start"}],
+        },
+        {
+            "module": 130,
+            "device": EAST,
+            "channels": [{"channel": 1, "field": "pressure_1"}],
+        },
+        {
+            "module": 120,
+            "device": WEST,
+            "include_link": False,
+            "channels": [{"channel": 3, "field": "pump_start"}],
+        },
+        {
+            "module": 120,
+            "name": "Pump Channel",
+            "device": CHANNEL,
+            "channels": [{"channel": 9, "field": "channel_level"}],
+        },
+    ],
+}
+
+
+async def test_split_module_fans_out_to_every_entry():
+    api = FakeApi()
+    app = await make_app(config=SPLIT_CONFIG, api=api)
+    uplink = {
+        "ts": NOW,
+        "modules": [
+            {
+                "module": 120,
+                "channels": {"1": 1, "3": 0, "9": 4.2},
+                "link": {"success_pct": 80, "retries": 0, "route": []},
+                "heard_ts": NOW - 2000,
+            }
+        ],
+    }
+    await app.on_message_create(event(DOOVIT, "mait_uplink", uplink))
+    states = {a: d for a, c, d in api.messages if c == "io_state"}
+    assert states[EAST] == {"pump_start": 1}
+    assert states[WEST] == {"pump_start": 0}
+    assert states[CHANNEL]["channel_level"] == 4.2
+    assert states[CHANNEL]["route"] == "Base → 120"
+
+    # Module 120 only lends the pumps a channel: it marks the channel device
+    # (and the western pump, whose only module it is) online, not the eastern pump
+    # whose own module 130 was not heard.
+    assert {a for a, *_ in api.pings} == {WEST, CHANNEL}
+    assert app.get_tag("m120_heard") == NOW - 2000
+    assert app.get_tag("modules_text") == "1 of 2 heard"
+    assert app.get_tag("errors_hidden") is True
+
+
+async def test_split_module_commands_resolve_per_device():
+    api = FakeApi()
+    app = await make_app(config=SPLIT_CONFIG, api=api)
+    for device in (EAST, WEST):
+        await app.on_message_create(
+            event(device, "io_commands", {"command": "start", "target": "pump_start"})
+        )
+    downlinks = [d for a, c, d in api.messages if c == "mait_downlink"]
+    assert [(d["device_id"], d["module"], d["channel"]) for d in downlinks] == [
+        (EAST, 120, 1),
+        (WEST, 120, 3),
+    ]
