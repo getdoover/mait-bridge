@@ -241,7 +241,8 @@ class MaitBridgeCloudConfig(config.Schema):
         position=27,
     )
 
-    position = config.ApplicationPosition(position=28)
+    position = config.ApplicationPosition(default=990, position=28)
+    default_open = config.ApplicationDefaultOpen(default=False, position=29)
 
 
 def plain(element):
