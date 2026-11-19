@@ -74,7 +74,9 @@ def main() -> int:
     parser.add_argument("--profile", default="dv2", help="Doover CLI profile")
     parser.add_argument("--channel", default="mait_uplink")
     parser.add_argument("--rounds", type=int, default=None)
-    parser.add_argument("--interval", type=float, default=120.0, help="seconds between rounds")
+    parser.add_argument(
+        "--interval", type=float, default=120.0, help="seconds between rounds"
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
