@@ -14,7 +14,7 @@ Fixture shape::
 Usage::
 
     uv run python tools/replay_fixture.py FIXTURE --agent 249020530978490113 \
-        --profile dv2 [--rounds 6] [--interval 120] [--dry-run]
+        --profile dv2 [--rounds 6] [--interval 120] [--utc-time-channel 80:6] [--dry-run]
 """
 
 from __future__ import annotations
@@ -48,16 +48,29 @@ def build_rounds(fixture: dict, rounds: int | None) -> list[list[dict]]:
     return out
 
 
-def round_message(entries: list[dict], now_ms: int) -> dict:
+def utc_hhmmss(ms: int) -> int:
+    t = time.gmtime(ms / 1000)
+    return t.tm_hour * 10000 + t.tm_min * 100 + t.tm_sec
+
+
+def round_message(
+    entries: list[dict], now_ms: int, time_channels: set[tuple[int, str]] = frozenset()
+) -> dict:
     reports = []
     for n, entry in enumerate(entries):
         m = entry["module"]
         # Spread the heard times over the last minute, like a real poll cycle.
         heard = now_ms - (len(entries) - n) * 2000
+        channels = dict(entry["sample"].get("channels") or {})
+        for ch in channels:
+            if (int(m["module"]), str(ch)) in time_channels:
+                # A recorded time of day moves to the replay's time, like every
+                # other timestamp in the round.
+                channels[ch] = utc_hhmmss(heard)
         reports.append(
             module_report(
                 m["module"],
-                entry["sample"].get("channels") or {},
+                channels,
                 heard,
                 success_pct=m.get("link_success_pct"),
                 retries=m.get("retries_avg"),
@@ -77,8 +90,21 @@ def main() -> int:
     parser.add_argument(
         "--interval", type=float, default=120.0, help="seconds between rounds"
     )
+    parser.add_argument(
+        "--utc-time-channel",
+        action="append",
+        default=[],
+        metavar="MODULE:CH",
+        help="a channel holding a UTC time of day (hhmmss), re-stamped to the "
+        "replay time, e.g. 80:6 for a GPS tracker; repeatable",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+
+    time_channels = set()
+    for item in args.utc_time_channel:
+        module, _, ch = item.partition(":")
+        time_channels.add((int(module), ch))
 
     fixture = json.loads(args.fixture.read_text())
     rounds = build_rounds(fixture, args.rounds)
@@ -96,7 +122,7 @@ def main() -> int:
         if index:
             time.sleep(args.interval)
         now_ms = int(time.time() * 1000)
-        message = round_message(entries, now_ms)
+        message = round_message(entries, now_ms, time_channels)
         if client is None:
             print(json.dumps(message)[:400], "…")
             continue
