@@ -83,15 +83,16 @@ A change to a module device's `control_settings` aggregate (the settings the edg
 
 ```json
 {"type": "settings", "device_id": "248969152092489731", "modules": [50],
- "targets": {"valve_1": {"module": 50, "channel": 1}, "valve_3": {"module": 50, "channel": 3}},
+ "targets": [{"app_key": "valve_control_1", "target": "valve_1", "module": 50, "channel": 1},
+             {"app_key": "valve_control_1", "target": "valve_3", "module": 50, "channel": 3}],
  "payload": {"valve_control_1": {"app": "valve_control", "schema": 1, "…": "…"}},
  "ts": 1795050000500}
 ```
 
 `module` / `channel` (and `targets` for settings) translate the generic output ids back to radio addresses,
-using the module map in reverse: a command's `target` is the field name the output is published under on
-that device, so the same field name on two devices (`pump_start` on two pumps sharing one module) resolves
-to each device's own module and channel.
+using the map in reverse: a command's `app_key` and `target` name the app input the output's channel is
+mapped to on that device, so the same target on two devices (`pump_start` on two pumps sharing one module)
+resolves to each device's own module and channel.
 Replies the edge writes back to `io_commands` (no `command` key) are not forwarded. Settings are
 forwarded only when they change.
 

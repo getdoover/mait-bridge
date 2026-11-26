@@ -29,6 +29,8 @@
         "icon_url": "https://cdn.jsdelivr.net/gh/getdoover/app-icons@dbdb7611ba3992fb4eea7965477c4ab2a3213525/icons/mait_bridge_cloud.png",
         "long_description": "docs/mait_bridge_cloud.md",
         "depends_on": [],
+        "widget": "widget/assets/MaitMapWidget.js",
+        "build_widget_command": "npm --prefix widget ci && npm --prefix widget run build",
         "organisation_id": null,
         "export_config_command": "export-config-cloud",
         "export_ui_command": "export-ui-cloud",

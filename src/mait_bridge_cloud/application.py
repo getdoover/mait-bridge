@@ -61,17 +61,36 @@ class MaitBridgeCloudApplication(Application):
     async def setup(self):
         # The connection ping would otherwise look up a public IP on every call.
         self.api.lookup_ip = False
-        self.mappings, self.config_problems = bridge.parse_module_map(
-            plain(self.config.modules)
-        )
-        self.module_index = bridge.by_module(self.mappings)
-        self.devices = bridge.mapped_devices(self.mappings)
         c = self.config
         self.uplink_channel = _str(c.uplink_channel, "mait_uplink")
         self.downlink_channel = _str(c.downlink_channel, "mait_downlink")
         self.state_channel = _str(c.state_channel, "io_state")
         self.command_channel = _str(c.command_channel, "io_commands")
         self.settings_channel = _str(c.settings_channel, "control_settings")
+        self.map_channel = _str(c.map_channel, "mait_map")
+
+        # The mapping page's map wins once it has been saved; until then the
+        # Module Map in config is used.
+        saved = await self._fetch_own(self.map_channel)
+        if bridge.map_has_rows(saved):
+            self.map_source = "Mapping page"
+            self.mappings, self.config_problems = bridge.parse_map(
+                saved, self.state_channel, self._device_names()
+            )
+        else:
+            self.map_source = "Module Map in config"
+            self.mappings, self.config_problems = bridge.parse_module_map(
+                plain(self.config.modules)
+            )
+        self.module_index = bridge.by_module(self.mappings)
+        self.devices = bridge.mapped_devices(self.mappings)
+
+    async def _fetch_own(self, channel: str) -> Any:
+        try:
+            agg = await self.api.fetch_channel_aggregate(channel)
+        except Exception:  # noqa: BLE001 - not saved yet
+            return None
+        return getattr(agg, "data", None)
 
     # -- events ---------------------------------------------------------------
 
@@ -96,18 +115,23 @@ class MaitBridgeCloudApplication(Application):
             await self.handle_settings(str(channel.agent_id), data, _now_ms())
 
     async def on_schedule(self, event):
+        await self.refresh_map_status()
         now = _now_ms()
         await self.reconcile_settings(now)
         await self.refresh_status(now)
 
     async def on_deployment(self, event):
+        await self.refresh_map_status()
         now = _now_ms()
+        await self.reconcile_settings(now)
+        await self.refresh_status(now)
+
+    async def refresh_map_status(self):
         await self._set("devices_mapped", len(self.devices))
+        await self._set("map_source", self.map_source)
         await self._set(
             "config_errors", "; ".join(self.config_problems[:MAX_ERRORS_SHOWN])
         )
-        await self.reconcile_settings(now)
-        await self.refresh_status(now)
 
     # -- uplink ---------------------------------------------------------------
 
@@ -175,7 +199,7 @@ class MaitBridgeCloudApplication(Application):
             fields = bridge.build_io_state(mapping, report, now_ms)
             if not fields:
                 continue
-            merged.update(fields)
+            bridge.deep_merge(merged, fields)
             try:
                 await self.api.create_message(
                     self.state_channel, fields, agent_id=agent
@@ -361,11 +385,19 @@ class MaitBridgeCloudApplication(Application):
 
     # -- helpers --------------------------------------------------------------
 
-    def _device_label(self, device_id: str) -> str:
-        device_map = (getattr(self, "received_deployment_config", None) or {}).get(
+    def _device_map(self) -> dict:
+        return (getattr(self, "received_deployment_config", None) or {}).get(
             "DEVICE_MAP"
         ) or {}
-        entry = device_map.get(str(device_id)) or {}
+
+    def _device_names(self) -> dict[str, str]:
+        return {
+            str(k): (v or {}).get("display_name") or (v or {}).get("name") or ""
+            for k, v in self._device_map().items()
+        }
+
+    def _device_label(self, device_id: str) -> str:
+        entry = self._device_map().get(str(device_id)) or {}
         return entry.get("display_name") or entry.get("name") or f"device {device_id}"
 
     async def _set(self, key: str, value):

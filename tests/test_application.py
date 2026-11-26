@@ -278,7 +278,9 @@ async def test_settings_forwarded_once_per_change():
     downlinks = [d for a, c, d in api.messages if c == "mait_downlink"]
     assert len(downlinks) == 1
     assert downlinks[0]["type"] == "settings"
-    assert downlinks[0]["targets"]["flood_gate_1"] == {"module": 10, "channel": 1}
+    assert {
+        "target": "flood_gate_1", "app_key": "", "module": 10, "channel": 1
+    } in downlinks[0]["targets"]
 
     # The schedule's re-check finds nothing new for the tank, but forwards the pivot's.
     api.aggregates[(TANK, "control_settings")] = settings
@@ -375,3 +377,37 @@ async def test_split_module_commands_resolve_per_device():
         (EAST, 120, 1),
         (WEST, 120, 3),
     ]
+
+
+async def test_saved_page_map_wins_over_config():
+    page = {"version": 1, "rows": [
+        {"module": 10, "channel": 3, "device": TANK,
+         "app_key": "analog_level_sensor_processor_1", "path": "$io_state.tank_level"},
+        {"module": 10, "channel": 1, "device": TANK, "app_key": "valve_control_1",
+         "point": "flood_gate_1", "path": "$io_state.valve_control_1.flood_gate_1"},
+        {"module": 10, "link": True, "device": TANK, "app_key": "link_health_1",
+         "paths": {"last_heard": "$io_state.link_health_1.last_heard"}},
+    ]}
+    api = FakeApi(aggregates={(None, "mait_map"): page, (TANK, "io_state"): {"x": 1}})
+    app = await make_app(api=api)
+    assert app.map_source == "Mapping page"
+    assert app.devices == [TANK]
+
+    await app.on_message_create(event(DOOVIT, "mait_uplink", UPLINK))
+    states = [d for a, c, d in api.messages if c == "io_state" and a == TANK]
+    assert states == [{
+        "tank_level": 9.004,
+        "valve_control_1": {"flood_gate_1": 0},
+        "link_health_1": {"last_heard": NOW - 5000},
+    }]
+
+    await app.on_message_create(event(TANK, "io_commands", {
+        "command": "open", "target": "flood_gate_1", "app_key": "valve_control_1"}))
+    downs = [d for a, c, d in api.messages if c == "mait_downlink"]
+    assert downs[-1]["module"] == 10 and downs[-1]["channel"] == 1
+
+
+async def test_config_map_used_until_page_saved():
+    app = await make_app()
+    assert app.map_source == "Module Map in config"
+    assert TANK in app.devices

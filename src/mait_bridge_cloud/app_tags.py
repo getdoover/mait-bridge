@@ -22,6 +22,7 @@ class MaitBridgeCloudTags(Tags):
     modules_fresh = Tag("number", default=None)
     modules_expected = Tag("number", default=None)
     devices_mapped = Tag("number", default=None)
+    map_source = Tag("string", default="")
 
     last_downlink = Tag("number", default=None)
     last_downlink_text = Tag("string", default="None forwarded yet")

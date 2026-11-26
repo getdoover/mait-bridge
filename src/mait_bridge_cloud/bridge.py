@@ -1,5 +1,14 @@
 """Pure logic of the cloud half of the bridge: no I/O, no clock reads.
 
+The map comes from one of two places:
+
+- the **mapping page** on the Doovit, saved in the Doovit's ``mait_map``
+  channel: one row per module channel, each pointing at one input of one app on
+  one device (``io_state.<app key>.<point>``, the app's automatic address), or
+  at a plain field for an app that reads an explicit path;
+- the older **Module Map** in install config (fields by name), used only while
+  the mapping page has never been saved.
+
 Uplink: one module report (from the Doovit's uplink channel) becomes one
 ``io_state`` message for every device the module is mapped to. A module may be
 split across several devices (each map entry takes its own subset of channels),
@@ -25,20 +34,47 @@ CONVERSION_NONE = "None"
 CONVERSION_UTC_HHMMSS = "UTC hhmmss to epoch ms"
 CONVERSIONS = (CONVERSION_NONE, CONVERSION_UTC_HHMMSS)
 
-# Link fields written alongside the mapped channels (before any prefix).
+# Link fields written alongside the mapped channels (before any prefix), by
+# the older config map.
 LINK_SUCCESS = "link_success_pct"
 RETRIES = "retries"
 ROUTE = "route"
 LAST_HEARD = "last_heard"
 
+# A module's link statistics, and the point ids of an app that takes all four
+# (Link Health) under the mapping page's "radio link" rows.
+LINK_STATS = ("success_pct", "retries", "route", "last_heard")
+LINK_POINTS = {
+    "success_pct": "link_success",
+    "retries": "retries",
+    "route": "route",
+    "last_heard": "last_heard",
+}
+LEGACY_LINK_FIELDS = {
+    "success_pct": LINK_SUCCESS,
+    "retries": RETRIES,
+    "route": ROUTE,
+    "last_heard": LAST_HEARD,
+}
+
+Path = tuple[str, ...]
+
 
 @dataclass(frozen=True)
 class ChannelMapping:
     channel: int
-    field: str
+    path: Path
     multiplier: float = 1.0
     offset: float = 0.0
     conversion: str = CONVERSION_NONE
+    # Who reads it: the app install and its point id. An output's point id is
+    # the target its commands carry. Empty app_key = a plain field (old map).
+    app_key: str = ""
+    point: str = ""
+
+    @property
+    def field(self) -> str:
+        return ".".join(self.path)
 
 
 @dataclass(frozen=True)
@@ -46,9 +82,14 @@ class ModuleMapping:
     module: int
     device_id: str
     name: str = ""
-    link_prefix: str = ""
-    include_link: bool = True
     channels: tuple[ChannelMapping, ...] = field(default_factory=tuple)
+    # Where the module's link statistics go: ((stat, path), ...), stat from
+    # LINK_STATS. Empty = this entry publishes no link fields.
+    link_paths: tuple[tuple[str, Path], ...] = field(default_factory=tuple)
+
+    @property
+    def include_link(self) -> bool:
+        return bool(self.link_paths)
 
 
 def _int(value: Any) -> int | None:
@@ -112,31 +153,194 @@ def parse_module_map(raw: Any) -> tuple[list[ModuleMapping], list[str]]:
                 problems.append(f"Module {module}: field {name!r} is mapped twice")
                 continue
             used_fields.add(name)
-            conversion = ch.get("conversion") or CONVERSION_NONE
-            if conversion not in CONVERSIONS:
-                conversion = CONVERSION_NONE
             channels.append(
                 ChannelMapping(
                     channel=number,
-                    field=name,
-                    multiplier=_float(ch.get("multiplier"), 1.0),
-                    offset=_float(ch.get("offset"), 0.0),
-                    conversion=conversion,
+                    path=(name,),
+                    point=name,
+                    **_scaling(ch),
                 )
             )
 
         include_link = entry.get("include_link")
+        prefix = str(entry.get("link_prefix") or "").strip()
+        link_paths: tuple[tuple[str, Path], ...] = ()
+        if include_link is None or bool(include_link):
+            link_paths = tuple(
+                (stat, (prefix + LEGACY_LINK_FIELDS[stat],)) for stat in LINK_STATS
+            )
         mappings.append(
             ModuleMapping(
                 module=module,
                 device_id=device_id,
                 name=str(entry.get("name") or "").strip(),
-                link_prefix=str(entry.get("link_prefix") or "").strip(),
-                include_link=True if include_link is None else bool(include_link),
                 channels=tuple(channels),
+                link_paths=link_paths,
             )
         )
     return mappings, problems
+
+
+def _scaling(row: dict) -> dict:
+    conversion = row.get("conversion") or CONVERSION_NONE
+    if conversion not in CONVERSIONS:
+        conversion = CONVERSION_NONE
+    return {
+        "multiplier": _float(row.get("multiplier"), 1.0),
+        "offset": _float(row.get("offset"), 0.0),
+        "conversion": conversion,
+    }
+
+
+def parse_path(value: Any, state_channel: str = "io_state") -> Path | None:
+    """``('pump_control_1', 'pump_1')`` from ``'$io_state.pump_control_1.pump_1'``.
+
+    None for anything that is not a path into the state channel.
+    """
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text.startswith("$"):
+        return None
+    body = text[1:]
+    channel, sep, rest = body.replace(":", ".", 1).partition(".")
+    if not sep or channel.strip() != state_channel:
+        return None
+    parts = tuple(p.strip() for p in rest.split(".") if p.strip())
+    return parts or None
+
+
+def map_has_rows(raw: Any) -> bool:
+    """Whether the mapping page has ever been saved (an empty saved map counts)."""
+    return isinstance(raw, dict) and isinstance(raw.get("rows"), list)
+
+
+def parse_map(
+    raw: Any,
+    state_channel: str = "io_state",
+    device_names: dict[str, str] | None = None,
+) -> tuple[list[ModuleMapping], list[str]]:
+    """The map saved by the mapping page (the Doovit's ``mait_map`` aggregate).
+
+    ``{"version": 1, "rows": [...]}`` with two kinds of row:
+
+    - a channel row ``{"module", "channel", "device", "app_key", "point",
+      "path", "multiplier", "offset", "conversion"}``: the module channel's
+      value goes to ``path`` on the device;
+    - a radio-link row ``{"module", "link": true, "device", "app_key",
+      "paths": {"success_pct", "retries", "route", "last_heard"}}``: the
+      module's link statistics go to those paths.
+
+    Rows are grouped into one ModuleMapping per (module, device), in row order.
+    """
+    names = device_names or {}
+    problems: list[str] = []
+    if not map_has_rows(raw):
+        return [], problems
+
+    groups: dict[tuple[int, str], dict] = {}
+    seen_channels: set[tuple[int, int, str]] = set()
+    seen_paths: dict[tuple[str, Path], str] = {}
+
+    def group(module: int, device_id: str) -> dict:
+        key = (module, device_id)
+        if key not in groups:
+            groups[key] = {"channels": [], "link": ()}
+        return groups[key]
+
+    for index, row in enumerate(raw["rows"]):
+        if not isinstance(row, dict):
+            continue
+        module = _int(row.get("module"))
+        device = row.get("device")
+        device_id = str(device).strip() if device not in (None, "") else ""
+        where = f"Module {module}" if module is not None else f"Row {index + 1}"
+        if module is None:
+            problems.append(f"Row {index + 1} has no module number")
+            continue
+        if not device_id.isdigit():
+            problems.append(f"{where} has a row with no device")
+            continue
+        app_key = str(row.get("app_key") or "").strip()
+
+        if row.get("link"):
+            paths = row.get("paths") if isinstance(row.get("paths"), dict) else {}
+            link: list[tuple[str, Path]] = []
+            for stat in LINK_STATS:
+                path = parse_path(paths.get(stat), state_channel)
+                if path is not None:
+                    link.append((stat, path))
+            if not link:
+                problems.append(f"{where}: its radio link row has nowhere to go")
+                continue
+            g = group(module, device_id)
+            if g["link"]:
+                problems.append(f"{where}: radio link mapped twice to one device")
+                continue
+            g["link"] = tuple(link)
+            continue
+
+        number = _int(row.get("channel"))
+        if number is None:
+            problems.append(f"{where}: a row has no channel")
+            continue
+        path = parse_path(row.get("path"), state_channel)
+        if path is None:
+            problems.append(f"{where} channel {number}: no input chosen")
+            continue
+        label = f"{module}.{number}"
+        if (module, number, device_id) in seen_channels:
+            problems.append(f"Channel {label} is mapped twice to one device")
+            continue
+        if (device_id, path) in seen_paths:
+            problems.append(
+                f"Channels {seen_paths[(device_id, path)]} and {label} both feed "
+                f"the same input on {names.get(device_id) or 'device ' + device_id}"
+            )
+            continue
+        seen_channels.add((module, number, device_id))
+        seen_paths[(device_id, path)] = label
+        group(module, device_id)["channels"].append(
+            ChannelMapping(
+                channel=number,
+                path=path,
+                app_key=app_key,
+                point=str(row.get("point") or path[-1]).strip(),
+                **_scaling(row),
+            )
+        )
+
+    mappings = [
+        ModuleMapping(
+            module=module,
+            device_id=device_id,
+            name=names.get(device_id, ""),
+            channels=tuple(g["channels"]),
+            link_paths=g["link"],
+        )
+        for (module, device_id), g in groups.items()
+    ]
+    return mappings, problems
+
+
+def deep_merge(into: dict, other: dict) -> dict:
+    """Merge ``other`` into ``into`` (nested dicts merged, other values replaced)."""
+    for key, value in other.items():
+        if isinstance(value, dict) and isinstance(into.get(key), dict):
+            deep_merge(into[key], value)
+        else:
+            into[key] = value
+    return into
+
+
+def _put(data: dict, path: Path, value: Any) -> None:
+    node = data
+    for part in path[:-1]:
+        nxt = node.get(part)
+        if not isinstance(nxt, dict):
+            nxt = node[part] = {}
+        node = nxt
+    node[path[-1]] = value
 
 
 def by_module(mappings: list[ModuleMapping]) -> dict[int, list[ModuleMapping]]:
@@ -259,19 +463,22 @@ def build_io_state(mapping: ModuleMapping, report: dict, received_ms: int) -> di
             continue
         value = convert(ch, channels[ch.channel], heard_ms)
         if value is not None:
-            data[ch.field] = value
+            _put(data, ch.path, value)
 
-    if mapping.include_link:
+    if mapping.link_paths:
         link = report.get("link") if isinstance(report.get("link"), dict) else {}
-        p = mapping.link_prefix
+        values: dict[str, Any] = {}
         success = link.get("success_pct")
         if isinstance(success, (int, float)) and not isinstance(success, bool):
-            data[p + LINK_SUCCESS] = round(float(success), 1)
+            values["success_pct"] = round(float(success), 1)
         retries = link.get("retries")
         if isinstance(retries, (int, float)) and not isinstance(retries, bool):
-            data[p + RETRIES] = retries
-        data[p + ROUTE] = format_route(link.get("route"), mapping.module)
-        data[p + LAST_HEARD] = heard_ms
+            values["retries"] = retries
+        values["route"] = format_route(link.get("route"), mapping.module)
+        values["last_heard"] = heard_ms
+        for stat, path in mapping.link_paths:
+            if stat in values:
+                _put(data, path, values[stat])
     return data
 
 
@@ -290,18 +497,38 @@ def uplink_reports(message: Any) -> list[dict]:
 # -- downlink ----------------------------------------------------------------
 
 
-def device_targets(mappings: list[ModuleMapping], device_id: str) -> dict[str, dict]:
-    """field -> {"module", "channel"} for every mapped output of a device.
+def device_targets(
+    mappings: list[ModuleMapping], device_id: str
+) -> dict[tuple[str, str], dict]:
+    """(app key, point) -> {"module", "channel"} for every mapped channel of a
+    device. A plain field (old map) has an empty app key.
 
-    A field written by two modules of the same device keeps the first one.
+    A point written by two modules of the same device keeps the first one.
     """
-    out: dict[str, dict] = {}
+    out: dict[tuple[str, str], dict] = {}
     for m in mappings:
         if m.device_id != str(device_id):
             continue
         for ch in m.channels:
-            out.setdefault(ch.field, {"module": m.module, "channel": ch.channel})
+            out.setdefault(
+                (ch.app_key, ch.point), {"module": m.module, "channel": ch.channel}
+            )
     return out
+
+
+def resolve_target(
+    mappings: list[ModuleMapping], device_id: str, app_key: str, target: str
+) -> dict | None:
+    """The module channel a command for ``target`` from ``app_key`` goes to.
+
+    The app's own point first, then a plain field of that name (old map), then
+    any app's point of that name on the device when exactly one matches."""
+    targets = device_targets(mappings, device_id)
+    found = targets.get((app_key, target)) or targets.get(("", target))
+    if found is not None:
+        return found
+    matches = [v for (k, p), v in targets.items() if p == target]
+    return matches[0] if len(matches) == 1 else None
 
 
 def device_modules(mappings: list[ModuleMapping], device_id: str) -> list[int]:
@@ -318,7 +545,8 @@ def command_downlink(
 ) -> tuple[dict | None, str | None]:
     """The downlink message for one command, or ``(None, problem)``."""
     target = str(data.get("target") or "").strip()
-    resolved = device_targets(mappings, device_id).get(target)
+    app_key = str(data.get("app_key") or "").strip()
+    resolved = resolve_target(mappings, device_id, app_key, target)
     if resolved is None:
         return None, f"Command {data.get('command')!r} for unmapped target {target!r}"
     return (
@@ -343,12 +571,16 @@ def settings_downlink(
     mappings: list[ModuleMapping], device_id: str, data: dict, now_ms: int
 ) -> dict:
     """The downlink message for a device's settings aggregate. ``targets`` lets
-    the edge translate every output id inside the settings to module/channel."""
+    the edge translate every output id inside the settings (under each app's
+    key) to module/channel."""
     return {
         "type": "settings",
         "device_id": str(device_id),
         "modules": device_modules(mappings, device_id),
-        "targets": device_targets(mappings, device_id),
+        "targets": [
+            {"app_key": app_key, "target": point, **where}
+            for (app_key, point), where in device_targets(mappings, device_id).items()
+        ],
         "payload": data,
         "ts": now_ms,
     }

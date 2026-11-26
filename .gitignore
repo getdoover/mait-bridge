@@ -177,3 +177,6 @@ package.zip
 
 # PyPI configuration file
 .pypirc
+
+# The widget keeps its own code in src/lib.
+!widget/src/lib/

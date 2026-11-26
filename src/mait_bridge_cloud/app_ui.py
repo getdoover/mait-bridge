@@ -1,14 +1,12 @@
 """The bridge's page on the Doovit: status, uplink and downlink activity, and
-when each mapped module was last heard. Built from config at deployment; every
-value is bound to a tag."""
+the mapping page (a widget) where modules are mapped to devices' app inputs and
+each module's last-heard time is shown."""
 
 from pathlib import Path
 
 from pydoover import ui
 
-from .app_tags import MaitBridgeCloudTags, module_heard_key
-from .app_config import plain
-from .bridge import mapped_modules, module_label, parse_module_map
+from .app_tags import MaitBridgeCloudTags
 
 
 class MaitBridgeCloudUI(ui.UI):
@@ -72,32 +70,27 @@ class MaitBridgeCloudUI(ui.UI):
             )
         )
 
-        raw = None
-        if self.config is not None:
-            raw = plain(self.config.modules)
-        mappings, _ = parse_module_map(raw)
-        if mappings:
-            # One row per module, even when it is split across several devices.
-            children = []
-            for index, module in enumerate(sorted(mapped_modules(mappings))):
-                label = module_label(mappings, module)
-                children.append(
-                    ui.Timestamp(
-                        f"{module} · {label}" if label else f"Module {module}",
-                        name=f"m{module}_heard",
-                        value=ui.tag_ref(module_heard_key(module), "number", None),
-                        position=index + 1,
-                    )
-                )
-            self.add_element(
-                ui.Submodule(
-                    "Modules Last Heard",
-                    name="modules_heard",
-                    status=MaitBridgeCloudTags.modules_text,
-                    children=children,
-                    position=10,
-                )
+        self.add_element(
+            ui.TextVariable(
+                "Map From",
+                name="map_source",
+                value=MaitBridgeCloudTags.map_source,
+                position=8,
             )
+        )
+        # The mapping page: modules and channels to devices' app inputs, and
+        # when each module was last heard.
+        self.add_element(
+            ui.RemoteComponent(
+                name="MaitMap",
+                display_name="Module Mapping",
+                component_url="$config.app().dv_widget_url",
+                scope="MaitMapWidget",
+                module="./MaitMapWidget",
+                app_key="$config.app().APP_KEY",
+                position=10,
+            )
+        )
 
 
 def export():

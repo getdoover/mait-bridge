@@ -118,11 +118,16 @@ class ModuleMapConfig(config.Object):
 
 class MaitBridgeCloudConfig(config.Schema):
     modules = config.Array(
-        "Module Map",
+        "Module Map (old)",
         name="modules",
         element=ModuleMapConfig("Module"),
-        description="Every radio module the bridge publishes, and where its readings go.",
+        description=(
+            "Only used until the mapping page on this device has been saved. "
+            "Map modules on the page instead: it lists every device's apps and "
+            "inputs by name."
+        ),
         default=[],
+        advanced=True,
         position=1,
     )
 
@@ -211,6 +216,15 @@ class MaitBridgeCloudConfig(config.Schema):
         position=24,
     )
 
+    map_channel = config.String(
+        "Map Channel",
+        name="map_channel",
+        description="Channel on this device where the mapping page saves the map.",
+        default="mait_map",
+        advanced=True,
+        position=25,
+    )
+
     subscription = ManySubscriptionConfig(
         default=["mait_uplink"],
         description=(
@@ -220,13 +234,13 @@ class MaitBridgeCloudConfig(config.Schema):
             "bridge as soon as they change."
         ),
         advanced=True,
-        position=25,
+        position=26,
     )
     schedule = ScheduleConfig(
         default="rate(5 minutes)",
         description="Periodic refresh: bridge status, stale modules, and a settings re-check on every target device.",
         advanced=True,
-        position=26,
+        position=27,
     )
     extended_permissions = ExtendedPermissionsConfig(
         default_device_group=True,
@@ -238,11 +252,11 @@ class MaitBridgeCloudConfig(config.Schema):
             "all_devices": False,
         },
         required=False,
-        position=27,
+        position=28,
     )
 
-    position = config.ApplicationPosition(default=990, position=28)
-    default_open = config.ApplicationDefaultOpen(default=False, position=29)
+    position = config.ApplicationPosition(default=990, position=29)
+    default_open = config.ApplicationDefaultOpen(default=False, position=30)
 
 
 def plain(element):

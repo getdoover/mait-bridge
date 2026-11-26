@@ -1,0 +1,22 @@
+/* No preflight: the widget renders inside the Doover site, whose base styles it keeps. */
+@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/utilities" layer(utilities);
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* State colours: mid-tones that read on both the light and dark site themes. */
+  --color-run: #16a34a;
+  --color-halt: #dc2626;
+}
+

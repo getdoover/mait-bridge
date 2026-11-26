@@ -48,6 +48,13 @@ RAW_MAP = [
 ]
 
 
+def by_target(msg):
+    return {
+        t["target"]: {"module": t["module"], "channel": t["channel"]}
+        for t in msg["targets"]
+    }
+
+
 def mappings():
     m, problems = bridge.parse_module_map(RAW_MAP)
     assert problems == []
@@ -67,7 +74,7 @@ def test_parse_defaults_and_problems():
     # A repeated module number is a further entry for it, not a problem.
     assert [x.module for x in m] == [10, 60, 80, 10]
     assert m[0].channels[1].multiplier == 1.0 and m[0].channels[1].offset == 0.0
-    assert m[2].link_prefix == "tracker_"
+    assert dict(m[2].link_paths)["route"] == ("tracker_route",)
     assert len(problems) == 2
     assert bridge.parse_module_map(None) == ([], [])
 
@@ -199,8 +206,10 @@ def test_settings_downlink_and_fingerprint():
     data = {"pump_control_1": {"app": "pump_control", "start_level": 60}}
     msg = bridge.settings_downlink(mappings(), PIVOT, data, 7)
     assert msg["type"] == "settings" and msg["modules"] == [60, 80]
-    assert msg["targets"]["run"] == {"module": 60, "channel": 2}
-    assert msg["targets"]["latitude"] == {"module": 80, "channel": 3}
+    targets = by_target(msg)
+    assert targets["run"] == {"module": 60, "channel": 2}
+    assert targets["latitude"] == {"module": 80, "channel": 3}
+    assert msg["targets"][0]["app_key"] == ""
     assert bridge.settings_fingerprint(data) == bridge.settings_fingerprint(
         {"pump_control_1": {"start_level": 60, "app": "pump_control"}}
     )
@@ -332,7 +341,7 @@ def test_split_module_downlink_reverse_map():
 
     settings = bridge.settings_downlink(m, EAST, {}, 1)
     assert settings["modules"] == [120, 130]
-    assert settings["targets"] == {
+    assert by_target(settings) == {
         "pump_start": {"module": 120, "channel": 1},
         "pressure_1": {"module": 130, "channel": 1},
         "battery_v": {"module": 130, "channel": 17},
@@ -349,3 +358,108 @@ def test_split_module_counts_once_and_online_modules():
     assert bridge.online_modules(m, CHANNEL) == {120}
     lent_only = [x for x in m if x.module == 120 and not x.include_link]
     assert bridge.online_modules(lent_only, EAST) == {120}
+
+
+# -- the mapping page's map ----------------------------------------------------
+
+OFFICE = "248969699172321036"
+
+PAGE_MAP = {
+    "version": 1,
+    "rows": [
+        {"module": 300, "channel": 3, "device": OFFICE,
+         "app_key": "analog_level_sensor_processor_1", "point": "tank_level",
+         "path": "$io_state.tank_level"},
+        {"module": 300, "channel": 17, "device": OFFICE, "app_key": "link_health_1",
+         "point": "battery_voltage", "path": "$io_state.link_health_1.battery_voltage"},
+        {"module": 300, "link": True, "device": OFFICE, "app_key": "link_health_1",
+         "paths": {
+             "success_pct": "$io_state.link_health_1.link_success",
+             "retries": "$io_state.link_health_1.retries",
+             "route": "$io_state.link_health_1.route",
+             "last_heard": "$io_state.link_health_1.last_heard",
+         }},
+        {"module": 310, "channel": 1, "device": OFFICE, "app_key": "pump_control_2",
+         "point": "pump_1", "path": "$io_state.pump_control_2.pump_1"},
+        {"module": 310, "channel": 2, "device": OFFICE, "app_key": "pump_control_2",
+         "point": "pump_2", "path": "$io_state.pump_control_2.pump_2",
+         "multiplier": 2, "offset": 1},
+        {"module": 310, "channel": 17, "device": OFFICE, "app_key": "link_health_2",
+         "point": "battery_voltage", "path": "$io_state.link_health_2.battery_voltage"},
+        {"module": 310, "link": True, "device": OFFICE, "app_key": "link_health_2",
+         "paths": {"route": "$io_state.link_health_2.route",
+                   "last_heard": "$io_state.link_health_2.last_heard"}},
+    ],
+}
+
+
+def test_parse_path():
+    assert bridge.parse_path("$io_state.a.b") == ("a", "b")
+    assert bridge.parse_path("$io_state:a") == ("a",)
+    assert bridge.parse_path("$other.a") is None
+    assert bridge.parse_path("io_state.a") is None
+    assert bridge.parse_path("$io_state") is None
+    assert bridge.parse_path(None) is None
+
+
+def test_parse_page_map_groups_by_module_and_device():
+    m, problems = bridge.parse_map(PAGE_MAP, device_names={OFFICE: "Office Tank"})
+    assert problems == []
+    assert [(x.module, x.device_id) for x in m] == [(300, OFFICE), (310, OFFICE)]
+    assert m[0].name == "Office Tank"
+    assert m[0].include_link and m[1].include_link
+    assert m[1].channels[1].multiplier == 2.0
+    assert m[1].channels[0].app_key == "pump_control_2"
+    assert bridge.map_has_rows({"rows": []}) and not bridge.map_has_rows(None)
+    assert bridge.parse_map({"rows": []}) == ([], [])
+
+
+def test_page_map_problems():
+    raw = {"rows": [
+        {"module": 10, "channel": 3, "device": TANK, "path": "$io_state.a.b"},
+        {"module": 10, "channel": 3, "device": TANK, "path": "$io_state.a.c"},
+        {"module": 10, "channel": 4, "device": TANK, "path": "$io_state.a.b"},
+        {"module": 10, "channel": 5, "device": TANK, "path": ""},
+        {"module": 10, "channel": 6},
+        {"channel": 6, "device": TANK, "path": "$io_state.x"},
+        {"module": 10, "link": True, "device": TANK, "paths": {}},
+    ]}
+    m, problems = bridge.parse_map(raw)
+    assert len(m) == 1 and len(m[0].channels) == 1
+    assert len(problems) == 6
+
+
+def test_page_map_io_state_nested_and_link():
+    m, _ = bridge.parse_map(PAGE_MAP)
+    report = {"module": 310, "channels": {"1": 1, "2": 3, "17": 12.1},
+              "link": {"success_pct": 90, "retries": 0.1, "route": [300]},
+              "heard_ts": 1_000}
+    data = bridge.build_io_state(m[1], report, 2_000)
+    assert data == {
+        "pump_control_2": {"pump_1": 1, "pump_2": 7},
+        "link_health_2": {"battery_voltage": 12.1, "route": "Base → 300 → 310",
+                          "last_heard": 1_000},
+    }
+    tank = bridge.build_io_state(
+        m[0], {"module": 300, "channels": {"3": 9.0}, "link": {}}, 5)
+    assert tank["tank_level"] == 9 and tank["link_health_1"]["last_heard"] == 5
+
+
+def test_deep_merge():
+    a = {"x": {"a": 1}, "y": 1}
+    bridge.deep_merge(a, {"x": {"b": 2}, "y": {"c": 3}})
+    assert a == {"x": {"a": 1, "b": 2}, "y": {"c": 3}}
+
+
+def test_page_map_commands_resolve_by_app_key():
+    m, _ = bridge.parse_map(PAGE_MAP)
+    msg, problem = bridge.command_downlink(
+        m, OFFICE, {"command": "start", "target": "pump_2", "app_key": "pump_control_2"}, 1)
+    assert problem is None and (msg["module"], msg["channel"]) == (310, 2)
+    # Without the app key a unique point name still resolves.
+    msg, _ = bridge.command_downlink(m, OFFICE, {"command": "start", "target": "pump_1"}, 1)
+    assert (msg["module"], msg["channel"]) == (310, 1)
+    # Ambiguous (two Link Health installs both have battery_voltage) does not.
+    none, problem = bridge.command_downlink(
+        m, OFFICE, {"command": "x", "target": "battery_voltage"}, 1)
+    assert none is None and "battery_voltage" in problem
