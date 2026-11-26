@@ -191,7 +191,7 @@ function MapInner({ uiElement }: WidgetProps) {
   };
 
   return (
-    <div className="mait-map flex flex-col gap-4 text-foreground">
+    <div className="flex flex-col gap-4 text-foreground">
       <p className="m-0 text-sm text-muted-foreground">
         Each row sends one radio module channel to one input of an app on a device. Pick the device, then the input; the apps on that device list
         what they take. Controls (pumps, valves, pivots) are mapped the same way, and their commands go back out on the same channel.
@@ -389,14 +389,14 @@ function ModuleCard({
       </div>
       <div>
         <div
-          className="mait-row mait-head px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+          className="mait-row px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
           style={{ borderStyle: "solid", borderColor: "var(--border)", borderWidth: "1px 0 0 0" }}
         >
-          <span className="mait-rm" />
-          <span className="mait-ch">Channel</span>
-          <span className="mait-dev">Device</span>
-          <span className="mait-to">Goes to</span>
-          <span className="mait-sc">Scaling</span>
+          <span>Channel</span>
+          <span>Device</span>
+          <span>Goes to</span>
+          <span>Scaling</span>
+          <span />
         </div>
         {mine.map(([row, i]) =>
           isLink(row) ? (
@@ -449,7 +449,7 @@ function DeviceSelect({
 }) {
   const known = !value || catalogue.some((d) => d.id === value);
   return (
-    <select className={`${FIELD} mait-dev`} value={value} onChange={(e) => onChange(e.target.value)} aria-label="Device">
+    <select className={FIELD} value={value} onChange={(e) => onChange(e.target.value)} aria-label="Device">
       <option value="">{blank}</option>
       {!known && <option value={value}>Unknown device {value}</option>}
       {catalogue.map((d) => (
@@ -462,7 +462,7 @@ function DeviceSelect({
 }
 
 const RemoveButton = ({ onClick, label }: { onClick: () => void; label: string }) => (
-  <Button variant="stop" size="sm" onClick={onClick} title={label} className="mait-rm !w-8 !px-0">
+  <Button variant="stop" size="sm" onClick={onClick} title={label} className="!w-8 !px-0">
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
       <path d="M18 6 6 18M6 6l12 12" />
     </svg>
@@ -526,9 +526,8 @@ function ChannelRowEditor({
         )
       }
     >
-      <RemoveButton onClick={onRemove} label={`Remove channel ${row.channel ?? ""}`.trim()} />
       <input
-        className={`${FIELD} mait-ch`}
+        className={FIELD}
         type="number"
         min={1}
         value={row.channel ?? ""}
@@ -537,7 +536,7 @@ function ChannelRowEditor({
       />
       <DeviceSelect value={row.device} catalogue={catalogue} onChange={(id) => onChange({ device: id, app_key: "", point: "", path: "" })} />
       <select
-        className={`${FIELD} mait-to`}
+        className={FIELD}
         value={value}
         disabled={!device}
         aria-label="Goes to"
@@ -567,11 +566,12 @@ function ChannelRowEditor({
       <button
         type="button"
         onClick={() => setScaling((s) => !s)}
-        className="mait-sc h-8 cursor-pointer truncate rounded-md border-0 bg-transparent px-1 text-left text-xs text-muted-foreground hover:text-foreground"
+        className="h-8 cursor-pointer truncate rounded-md border-0 bg-transparent px-1 text-left text-xs text-muted-foreground hover:text-foreground"
         title="Scaling and conversion"
       >
         {scaled ? scaleText(row) : "Raw"} {scaling ? "▴" : "▾"}
       </button>
+      <RemoveButton onClick={onRemove} label={`Remove channel ${row.channel ?? ""}`.trim()} />
     </RowShell>
   );
 }
@@ -599,8 +599,7 @@ function LinkRowEditor({
   const apps = device?.apps.filter(takesLink) ?? [];
   return (
     <RowShell problems={problems}>
-      <span className="mait-rm" />
-      <span className="mait-ch text-xs font-medium leading-tight text-muted-foreground" title="The module's one radio link: its link success, retries, route and last heard time">
+      <span className="text-xs font-medium leading-tight text-muted-foreground" title="The module's one radio link: its link success, retries, route and last heard time">
         Radio link
       </span>
       <DeviceSelect
@@ -615,7 +614,7 @@ function LinkRowEditor({
         }}
       />
       <select
-        className={`${FIELD} mait-to`}
+        className={FIELD}
         value={row.app_key}
         disabled={!device}
         aria-label="Goes to"
@@ -632,7 +631,8 @@ function LinkRowEditor({
           </option>
         ))}
       </select>
-      <span className="mait-sc" />
+      <span />
+      <span />
     </RowShell>
   );
 }

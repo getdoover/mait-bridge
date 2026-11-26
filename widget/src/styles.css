@@ -21,31 +21,12 @@
 }
 
 
-/* Mapping rows: one line when there is room, two when the column is narrow
-   (the site's two-column layout), so nothing ever scrolls sideways. */
-.mait-map {
-  container-type: inline-size;
-}
+/* Mapping rows: one line, columns capped at a sane width so the row never
+   outgrows its card (no sideways scroll). A dropdown may clip its chosen
+   text; its open list still shows the options in full. */
 .mait-row {
   display: grid;
   align-items: center;
-  gap: 6px 8px;
-  grid-template-columns: 32px 56px minmax(0, 1fr) minmax(0, 1.5fr) 72px;
-  grid-template-areas: "rm ch dev to sc";
-}
-.mait-rm { grid-area: rm; }
-.mait-ch { grid-area: ch; }
-.mait-dev { grid-area: dev; }
-.mait-to { grid-area: to; }
-.mait-sc { grid-area: sc; }
-@container (max-width: 620px) {
-  .mait-row {
-    grid-template-columns: 32px 56px minmax(0, 1fr) 64px;
-    grid-template-areas:
-      "rm ch dev dev"
-      ". . to sc";
-  }
-  .mait-head {
-    display: none;
-  }
+  gap: 8px;
+  grid-template-columns: 52px minmax(0, 190px) minmax(0, 250px) 60px 32px;
 }
