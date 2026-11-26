@@ -20,3 +20,32 @@
   --color-halt: #dc2626;
 }
 
+
+/* Mapping rows: one line when there is room, two when the column is narrow
+   (the site's two-column layout), so nothing ever scrolls sideways. */
+.mait-map {
+  container-type: inline-size;
+}
+.mait-row {
+  display: grid;
+  align-items: center;
+  gap: 6px 8px;
+  grid-template-columns: 32px 56px minmax(0, 1fr) minmax(0, 1.5fr) 72px;
+  grid-template-areas: "rm ch dev to sc";
+}
+.mait-rm { grid-area: rm; }
+.mait-ch { grid-area: ch; }
+.mait-dev { grid-area: dev; }
+.mait-to { grid-area: to; }
+.mait-sc { grid-area: sc; }
+@container (max-width: 620px) {
+  .mait-row {
+    grid-template-columns: 32px 56px minmax(0, 1fr) 64px;
+    grid-template-areas:
+      "rm ch dev dev"
+      ". . to sc";
+  }
+  .mait-head {
+    display: none;
+  }
+}

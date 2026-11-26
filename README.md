@@ -8,8 +8,13 @@ Connects a MAIT iNTELLiNet radio network to Doover. Two apps live in this repo:
 | **MAIT Bridge Cloud** (`mait_bridge_cloud`) | Processor | The same Doovit, in the cloud | Fans each module's readings out to the Doover device that represents it, keeps those devices online, and forwards their commands and settings back to the bridge |
 
 The Doover devices the readings land on carry ordinary, hardware-neutral apps (level, flow, valve, pump,
-pivot, GPS, link health) that read `$io_state.<field>` and command outputs through `io_commands`. Everything
-MAIT-specific stays in these two apps.
+pivot, GPS, link health). Each app reads an input left blank from its automatic address,
+`$io_state.<app key>.<input>`, and commands outputs through `io_commands`. Which module channel feeds which
+input is set in one place: the **Module Mapping** page on MAIT Bridge Cloud. Everything MAIT-specific stays in
+these two apps.
+
+**Building or changing an app for a device on a MAIT site?** Read
+[docs/building-apps-for-a-mait-site.md](docs/building-apps-for-a-mait-site.md) first.
 
 ```
 MAIT base radio ──serial──► Doovit: MAIT Bridge ──mait_uplink──► MAIT Bridge Cloud ──io_state──► module devices

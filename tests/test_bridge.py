@@ -423,10 +423,16 @@ def test_page_map_problems():
         {"module": 10, "channel": 6},
         {"channel": 6, "device": TANK, "path": "$io_state.x"},
         {"module": 10, "link": True, "device": TANK, "paths": {}},
+        {"module": 10, "link": True, "device": TANK, "app_key": "lh",
+         "paths": {"route": "$io_state.lh.route"}},
+        {"module": 20, "link": True, "device": "", "app_key": "", "paths": {}},
     ]}
     m, problems = bridge.parse_map(raw)
     assert len(m) == 1 and len(m[0].channels) == 1
-    assert len(problems) == 6
+    # 5 bad channel rows, a link row with nowhere to go, then a second link
+    # row for module 10; module 20's unused link row is skipped quietly.
+    assert len(problems) == 7
+    assert any("more than one radio link" in p for p in problems)
 
 
 def test_page_map_io_state_nested_and_link():

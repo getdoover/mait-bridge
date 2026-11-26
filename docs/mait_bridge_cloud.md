@@ -30,8 +30,9 @@ input of one app on one device:
    That list shows every app on the device and the inputs it takes, by name ("Flood Gate 1",
    "Suction Pressure", "Battery voltage"). Controls (a valve, a pump, a pivot's run) are listed as well;
    their commands go back out on the same channel.
-3. Add a **radio link** row to send the module's link success, retries, route and last-heard time to the
-   device's Link Health app.
+3. Every module's first row is its **radio link** (a module has one radio). Pick the device whose Link
+   Health app shows the module's link success, retries, route and last-heard time, or leave it as
+   "Not shown".
 4. **Save.**
 
 A module can be split across several devices (one row per channel), and several modules can feed one
@@ -39,6 +40,9 @@ device. The page flags a channel mapped twice, an input fed twice, an input whos
 devices whose controls can't reach the radios yet because the bridge isn't subscribed to their
 `io_commands`. **Inputs with nothing mapped to them** lists what is still unwired on each device. Each
 module shows when it was last heard.
+
+To build a new app for a device on a MAIT site, or change one so the bridge can feed it, read
+[Building apps for a MAIT site](building-apps-for-a-mait-site.md).
 
 No setting on the device's apps needs changing: an app input left blank reads its automatic address
 (`io_state.<app key>.<input>`), and that is where the bridge writes it. Apps that only take an explicit

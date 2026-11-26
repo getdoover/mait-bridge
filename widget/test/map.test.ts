@@ -11,6 +11,7 @@ import {
   rowsFromLegacy,
   toDoc,
   unwired,
+  withLinkRows,
   type Row,
 } from "../src/lib/map.ts";
 
@@ -80,7 +81,7 @@ test("catalogue: own device and system apps left out, tag wins over config", () 
     ["analog_level_sensor_processor_1", "config"],
   ]);
   const level = cat[0].apps.find((a) => a.appKey === "analog_level_sensor_processor_1")!;
-  assert.deepEqual(level.points, [{ id: "tank_level", label: "Input", kind: "input", path: "$io_state.tank_level", auto: false }]);
+  assert.deepEqual(level.points, [{ id: "tank_level", label: "Tank Level", kind: "input", path: "$io_state.tank_level", auto: false }]);
 });
 
 test("config scan labels array items by name", () => {
@@ -141,4 +142,17 @@ test("rowsFromLegacy points old fields at the apps that read them", () => {
 test("toDoc drops default scaling", () => {
   const doc = toDoc([{ module: 1, channel: 2, device: TANK, app_key: "a", point: "b", path: "$io_state.a.b", multiplier: 1, offset: 0, conversion: "None" }], "Sid", 5);
   assert.deepEqual(doc, { version: 1, rows: [{ module: 1, channel: 2, device: TANK, app_key: "a", point: "b", path: "$io_state.a.b" }], updated_at: 5, updated_by: "Sid" });
+});
+
+test("every module has one radio link row, first; an unused one is not saved", () => {
+  const out = withLinkRows([
+    { module: 20, channel: 3, device: TANK, app_key: "a", point: "b", path: "$io_state.a.b" },
+    { module: 10, channel: 1, device: TANK, app_key: "a", point: "c", path: "$io_state.a.c" },
+    { module: 10, link: true, device: TANK, app_key: "link_health_1", paths: {} },
+  ]);
+  assert.deepEqual(out.map((r) => [r.module, "link" in r]), [[20, true], [20, false], [10, true], [10, false]]);
+  assert.equal(checkRows(out, cat, [`${TANK}-io_commands`]).filter((p) => p.row === 0).length, 0);
+  assert.deepEqual(toDoc(out, undefined, 1).rows.map((r) => r.module), [20, 10, 10]);
+  const twice = checkRows([...out, { module: 10, link: true, device: "", app_key: "", paths: {} }], cat, []);
+  assert.ok(twice.some((p) => /more than one radio link/.test(p.text)));
 });

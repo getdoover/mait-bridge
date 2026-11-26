@@ -132,9 +132,10 @@ export function buildCatalogue(
       const appName = typeof cfg.APPLICATION_NAME === "string" ? cfg.APPLICATION_NAME : appKey;
       if (SYSTEM_APPS.test(appName)) continue;
       const fromTag = pointsFromTag(isDict(tagValues[appKey]) ? (tagValues[appKey] as Dict).io_points : undefined);
-      const points = fromTag ?? pointsFromConfig(cfg, stateChannel);
-      if (!points.length) continue;
       const name = (typeof cfg.APP_INSTALL_DISPLAY_NAME === "string" && cfg.APP_INSTALL_DISPLAY_NAME) || (typeof cfg.APP_DISPLAY_NAME === "string" && cfg.APP_DISPLAY_NAME) || appKey;
+      // A config path's setting is often just "Input": name it after the app instead.
+      const points = fromTag ?? pointsFromConfig(cfg, stateChannel).map((p) => (p.label === "Input" ? { ...p, label: name } : p));
+      if (!points.length) continue;
       entries.push({ appKey, name, source: fromTag ? "app" : "config", points });
     }
     entries.sort((a, b) => a.name.localeCompare(b.name));
@@ -319,6 +320,12 @@ export function checkRows(rows: Row[], cat: DeviceEntry[], subscriptions: string
 
   rows.forEach((r, i) => {
     const dev = findDevice(cat, r.device);
+    if (isLink(r) && !r.device) {
+      // The radio link isn't shown anywhere: allowed.
+      if (seenLink.has(String(r.module))) problems.push({ row: i, text: `Module ${r.module} has more than one radio link row`, level: "error" });
+      seenLink.set(String(r.module), i);
+      return;
+    }
     if (!r.device) {
       problems.push({ row: i, text: "Choose the device it goes to", level: "error" });
       return;
@@ -329,11 +336,10 @@ export function checkRows(rows: Row[], cat: DeviceEntry[], subscriptions: string
     }
     if (isLink(r)) {
       const app = findApp(cat, r.device, r.app_key);
-      if (!r.app_key) problems.push({ row: i, text: "Choose the app that shows the radio link", level: "error" });
+      if (!r.app_key) problems.push({ row: i, text: "Choose the app that shows the radio link, or set the device back to \"Not shown\"", level: "error" });
       else if (!app) problems.push({ row: i, text: "That app is no longer on this device", level: "error" });
-      const key = `${r.module}|${r.device}`;
-      if (seenLink.has(key)) problems.push({ row: i, text: `Module ${r.module}'s radio link already goes to ${dev.name}`, level: "error" });
-      seenLink.set(key, i);
+      if (seenLink.has(String(r.module))) problems.push({ row: i, text: `Module ${r.module} has more than one radio link row`, level: "error" });
+      seenLink.set(String(r.module), i);
       return;
     }
     if (r.channel == null) problems.push({ row: i, text: "Enter the channel number", level: "error" });
@@ -393,6 +399,30 @@ export function unwired(rows: Row[], cat: DeviceEntry[]): Array<{ device: Device
   return out;
 }
 
+/** A module's one radio link row: every module has exactly one, first among its rows. */
+export const emptyLink = (module: number): LinkRow => ({ module, link: true, device: "", app_key: "", paths: {} });
+
+/**
+ * Rows with every module's radio link row first among that module's rows. A
+ * module without one gets an empty one ("not shown anywhere"); extra link rows
+ * of a module (only possible in a map saved elsewhere) are kept, after the
+ * first, so the page can flag them.
+ */
+export function withLinkRows(rows: Row[]): Row[] {
+  const out: Row[] = [];
+  const done = new Set<number>();
+  for (const r of rows) {
+    if (done.has(r.module)) continue;
+    done.add(r.module);
+    const mine = rows.filter((x) => x.module === r.module);
+    const links = mine.filter(isLink);
+    out.push(...(links.length ? links : [emptyLink(r.module)]), ...mine.filter((x) => !isLink(x)));
+  }
+  return out;
+}
+
 export function toDoc(rows: Row[], by: string | undefined, now: number): MapDoc {
-  return { version: 1, rows: cleanRows(rows), updated_at: now, ...(by ? { updated_by: by } : {}) };
+  // A radio link that isn't shown anywhere is not saved.
+  const kept = cleanRows(rows).filter((r) => !isLink(r) || (r.device && r.app_key));
+  return { version: 1, rows: kept, updated_at: now, ...(by ? { updated_by: by } : {}) };
 }

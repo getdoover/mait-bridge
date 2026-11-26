@@ -14,6 +14,7 @@ import {
   buildCatalogue,
   checkRows,
   cleanRows,
+  emptyLink,
   findApp,
   findDevice,
   isLink,
@@ -25,6 +26,7 @@ import {
   takesLink,
   toDoc,
   unwired,
+  withLinkRows,
   type ChannelRow,
   type DeviceEntry,
   type Dict,
@@ -57,7 +59,6 @@ const str = (v: unknown, d: string) => (typeof v === "string" && v.trim() ? v.tr
 const FIELD =
   "h-8 w-full min-w-0 rounded-md border border-solid border-border bg-background px-2 text-[13px] text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
-const COLS = "64px minmax(150px, 1fr) minmax(200px, 1.6fr) 96px 32px";
 
 function MapInner({ uiElement }: WidgetProps) {
   const params = useRemoteParams();
@@ -114,8 +115,8 @@ function MapInner({ uiElement }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [dirty, setDirty] = useState(false);
   const baseline = useMemo(() => {
-    if (savedDoc) return cleanRows(savedDoc.rows);
-    if (legacy && catalogueReady) return rowsFromLegacy(bridgeCfg?.modules, catalogue, stateChannel);
+    if (savedDoc) return withLinkRows(cleanRows(savedDoc.rows));
+    if (legacy && catalogueReady) return withLinkRows(rowsFromLegacy(bridgeCfg?.modules, catalogue, stateChannel));
     return [];
   }, [savedDoc, legacy, catalogueReady, bridgeCfg, catalogue, stateChannel]);
   useEffect(() => {
@@ -123,7 +124,7 @@ function MapInner({ uiElement }: WidgetProps) {
   }, [baseline, dirty]);
 
   const edit = useCallback((fn: (rows: Row[]) => Row[]) => {
-    setRows((r) => fn(r ?? []));
+    setRows((r) => withLinkRows(fn(r ?? [])));
     setDirty(true);
   }, []);
 
@@ -151,7 +152,7 @@ function MapInner({ uiElement }: WidgetProps) {
     try {
       const doc = toDoc(refreshPaths(current, catalogue), actor, Date.now());
       await client.aggregates.putAggregate(agentId, mapChannel, doc as unknown as Record<string, unknown>);
-      setRows(cleanRows(doc.rows));
+      setRows(withLinkRows(cleanRows(doc.rows)));
       setDirty(false);
       await saved.refetch?.();
     } catch (e) {
@@ -171,7 +172,7 @@ function MapInner({ uiElement }: WidgetProps) {
   const addModule = () => {
     const n = Number(newModule);
     if (!Number.isInteger(n) || n < 1) return;
-    if (!modules.includes(n)) edit((r) => [...r, emptyChannel(n)]);
+    if (!modules.includes(n)) edit((r) => [...r, emptyLink(n), emptyChannel(n)]);
     setNewModule("");
   };
 
@@ -190,7 +191,7 @@ function MapInner({ uiElement }: WidgetProps) {
   };
 
   return (
-    <div className="flex flex-col gap-4 text-foreground">
+    <div className="mait-map flex flex-col gap-4 text-foreground">
       <p className="m-0 text-sm text-muted-foreground">
         Each row sends one radio module channel to one input of an app on a device. Pick the device, then the input; the apps on that device list
         what they take. Controls (pumps, valves, pivots) are mapped the same way, and their commands go back out on the same channel.
@@ -333,7 +334,8 @@ function ModuleCard({
 }) {
   const mine = rows.map((r, i) => [r, i] as const).filter(([r]) => r.module === module);
   const devices = [...new Set(mine.map(([r]) => r.device).filter(Boolean))].map((d) => findDevice(catalogue, d)?.name ?? d);
-  const lastDevice = mine.length ? mine[mine.length - 1][0].device : "";
+  const channelRows = mine.filter(([r]) => !isLink(r));
+  const lastDevice = channelRows.length ? channelRows[channelRows.length - 1][0].device : mine.find(([r]) => isLink(r))?.[0].device ?? "";
   const stale = heard != null && now - heard > STALE_MIN * 60_000;
   const [number, setNumber] = useState(String(module));
   useEffect(() => setNumber(String(module)), [module]);
@@ -380,31 +382,26 @@ function ModuleCard({
           <Button size="sm" variant="ghost" onClick={() => insertAfterModule(emptyChannel(module, lastDevice))}>
             Add channel
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => insertAfterModule({ module, link: true, device: lastDevice, app_key: "", paths: {} })}>
-            Add radio link
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => onEdit((rs) => rs.filter((r) => r.module !== module))} title={`Remove module ${module} and all its rows`}>
-            Remove
+          <Button size="sm" variant="stop" onClick={() => onEdit((rs) => rs.filter((r) => r.module !== module))} title={`Remove module ${module} and all its rows`}>
+            Remove module
           </Button>
         </span>
       </div>
-      <div className="overflow-x-auto">
-        <div style={{ minWidth: 560 }}>
-          <div
-            className="grid items-center gap-x-3 px-4 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-            style={{ gridTemplateColumns: COLS, borderStyle: "solid", borderColor: "var(--border)", borderWidth: "1px 0 0 0" }}
-          >
-            <span>Channel</span>
-            <span>Device</span>
-            <span>Goes to</span>
-            <span>Scaling</span>
-            <span />
-          </div>
-          {mine.length === 0 && <div className="px-4 pb-3 text-xs text-muted-foreground">No channels yet.</div>}
-          {mine.map(([row, i]) =>
-            isLink(row) ? (
-              <LinkRowEditor key={i} row={row} catalogue={catalogue} problems={problems(i)} onChange={(p) => update(i, p)} onRemove={() => remove(i)} />
-            ) : (
+      <div>
+        <div
+          className="mait-row mait-head px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+          style={{ borderStyle: "solid", borderColor: "var(--border)", borderWidth: "1px 0 0 0" }}
+        >
+          <span className="mait-rm" />
+          <span className="mait-ch">Channel</span>
+          <span className="mait-dev">Device</span>
+          <span className="mait-to">Goes to</span>
+          <span className="mait-sc">Scaling</span>
+        </div>
+        {mine.map(([row, i]) =>
+          isLink(row) ? (
+            <LinkRowEditor key={i} row={row} catalogue={catalogue} problems={problems(i)} onChange={(p) => update(i, p)} />
+          ) : (
               <ChannelRowEditor
                 key={i}
                 row={row}
@@ -413,11 +410,11 @@ function ModuleCard({
                 catalogue={catalogue}
                 problems={problems(i)}
                 onChange={(p) => update(i, p)}
-                onRemove={() => remove(i)}
-              />
-            ),
-          )}
-        </div>
+              onRemove={() => remove(i)}
+            />
+          ),
+        )}
+        {channelRows.length === 0 && <div className="px-3 pb-3 text-xs text-muted-foreground">No channels yet.</div>}
       </div>
     </Card>
   );
@@ -425,8 +422,8 @@ function ModuleCard({
 
 function RowShell({ children, problems, extra }: { children: React.ReactNode; problems: Problem[]; extra?: React.ReactNode }) {
   return (
-    <div className="px-4 py-2" style={{ borderStyle: "solid", borderColor: "var(--border)", borderWidth: "1px 0 0 0" }}>
-      <div className="grid items-center gap-x-3" style={{ gridTemplateColumns: COLS }}>
+    <div className="px-3 py-2" style={{ borderStyle: "solid", borderColor: "var(--border)", borderWidth: "1px 0 0 0" }}>
+      <div className="mait-row">
         {children}
       </div>
       {extra}
@@ -439,11 +436,21 @@ function RowShell({ children, problems, extra }: { children: React.ReactNode; pr
   );
 }
 
-function DeviceSelect({ value, catalogue, onChange }: { value: string; catalogue: DeviceEntry[]; onChange: (id: string) => void }) {
+function DeviceSelect({
+  value,
+  catalogue,
+  onChange,
+  blank = "Choose a device…",
+}: {
+  value: string;
+  catalogue: DeviceEntry[];
+  onChange: (id: string) => void;
+  blank?: string;
+}) {
   const known = !value || catalogue.some((d) => d.id === value);
   return (
-    <select className={FIELD} value={value} onChange={(e) => onChange(e.target.value)} aria-label="Device">
-      <option value="">Choose a device…</option>
+    <select className={`${FIELD} mait-dev`} value={value} onChange={(e) => onChange(e.target.value)} aria-label="Device">
+      <option value="">{blank}</option>
       {!known && <option value={value}>Unknown device {value}</option>}
       {catalogue.map((d) => (
         <option key={d.id} value={d.id}>
@@ -454,16 +461,13 @@ function DeviceSelect({ value, catalogue, onChange }: { value: string; catalogue
   );
 }
 
-const RemoveButton = ({ onClick }: { onClick: () => void }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    title="Remove this row"
-    aria-label="Remove this row"
-    className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-  >
-    ×
-  </button>
+const RemoveButton = ({ onClick, label }: { onClick: () => void; label: string }) => (
+  <Button variant="stop" size="sm" onClick={onClick} title={label} className="mait-rm !w-8 !px-0">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+    <span className="sr-only">{label}</span>
+  </Button>
 );
 
 function ChannelRowEditor({
@@ -522,8 +526,9 @@ function ChannelRowEditor({
         )
       }
     >
+      <RemoveButton onClick={onRemove} label={`Remove channel ${row.channel ?? ""}`.trim()} />
       <input
-        className={FIELD}
+        className={`${FIELD} mait-ch`}
         type="number"
         min={1}
         value={row.channel ?? ""}
@@ -532,7 +537,7 @@ function ChannelRowEditor({
       />
       <DeviceSelect value={row.device} catalogue={catalogue} onChange={(id) => onChange({ device: id, app_key: "", point: "", path: "" })} />
       <select
-        className={FIELD}
+        className={`${FIELD} mait-to`}
         value={value}
         disabled={!device}
         aria-label="Goes to"
@@ -562,12 +567,11 @@ function ChannelRowEditor({
       <button
         type="button"
         onClick={() => setScaling((s) => !s)}
-        className="h-8 cursor-pointer truncate rounded-md border-0 bg-transparent px-1 text-left text-xs text-muted-foreground hover:text-foreground"
+        className="mait-sc h-8 cursor-pointer truncate rounded-md border-0 bg-transparent px-1 text-left text-xs text-muted-foreground hover:text-foreground"
         title="Scaling and conversion"
       >
         {scaled ? scaleText(row) : "Raw"} {scaling ? "▴" : "▾"}
       </button>
-      <RemoveButton onClick={onRemove} />
     </RowShell>
   );
 }
@@ -585,24 +589,33 @@ function LinkRowEditor({
   catalogue,
   problems,
   onChange,
-  onRemove,
 }: {
   row: LinkRow;
   catalogue: DeviceEntry[];
   problems: Problem[];
   onChange: (p: Partial<LinkRow>) => void;
-  onRemove: () => void;
 }) {
   const device = findDevice(catalogue, row.device);
   const apps = device?.apps.filter(takesLink) ?? [];
   return (
     <RowShell problems={problems}>
-      <span className="text-xs font-medium text-muted-foreground" title="The module's link success, retries, route and last heard time">
+      <span className="mait-rm" />
+      <span className="mait-ch text-xs font-medium leading-tight text-muted-foreground" title="The module's one radio link: its link success, retries, route and last heard time">
         Radio link
       </span>
-      <DeviceSelect value={row.device} catalogue={catalogue} onChange={(id) => onChange({ device: id, app_key: "", paths: {} })} />
+      <DeviceSelect
+        value={row.device}
+        catalogue={catalogue}
+        blank="Not shown"
+        onChange={(id) => {
+          // A device with one link health app takes it straight away.
+          const candidates = findDevice(catalogue, id)?.apps.filter(takesLink) ?? [];
+          const only = candidates.length === 1 ? candidates[0] : undefined;
+          onChange({ device: id, app_key: only?.appKey ?? "", paths: only ? linkPaths(only) : {} });
+        }}
+      />
       <select
-        className={FIELD}
+        className={`${FIELD} mait-to`}
         value={row.app_key}
         disabled={!device}
         aria-label="Goes to"
@@ -611,16 +624,15 @@ function LinkRowEditor({
           onChange({ app_key: e.target.value, paths: app ? linkPaths(app) : {} });
         }}
       >
-        <option value="">{device ? (apps.length ? "Choose the app that shows it…" : "No link health app on this device") : "Choose a device first"}</option>
+        <option value="">{device ? (apps.length ? "Choose the app that shows it…" : "No link health app on this device") : "Not shown on any device"}</option>
         {row.app_key && !apps.some((a) => a.appKey === row.app_key) && <option value={row.app_key}>{row.app_key} (no longer on this device)</option>}
         {apps.map((a) => (
           <option key={a.appKey} value={a.appKey}>
-            {a.name}: link success, retries, route, last heard
+            {a.name}
           </option>
         ))}
       </select>
-      <span />
-      <RemoveButton onClick={onRemove} />
+      <span className="mait-sc" />
     </RowShell>
   );
 }

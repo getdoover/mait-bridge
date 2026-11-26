@@ -229,7 +229,8 @@ def parse_map(
       value goes to ``path`` on the device;
     - a radio-link row ``{"module", "link": true, "device", "app_key",
       "paths": {"success_pct", "retries", "route", "last_heard"}}``: the
-      module's link statistics go to those paths.
+      module's link statistics go to those paths. At most one per module (a
+      module has one radio); one with no device and no app is skipped.
 
     Rows are grouped into one ModuleMapping per (module, device), in row order.
     """
@@ -240,6 +241,7 @@ def parse_map(
 
     groups: dict[tuple[int, str], dict] = {}
     seen_channels: set[tuple[int, int, str]] = set()
+    linked: set[int] = set()
     seen_paths: dict[tuple[str, Path], str] = {}
 
     def group(module: int, device_id: str) -> dict:
@@ -258,12 +260,19 @@ def parse_map(
         if module is None:
             problems.append(f"Row {index + 1} has no module number")
             continue
+        app_key = str(row.get("app_key") or "").strip()
+        if row.get("link") and not device_id and not app_key:
+            continue  # the module's radio link isn't shown anywhere
         if not device_id.isdigit():
             problems.append(f"{where} has a row with no device")
             continue
-        app_key = str(row.get("app_key") or "").strip()
 
         if row.get("link"):
+            # A module has one radio, so one radio link row.
+            if module in linked:
+                problems.append(f"{where}: more than one radio link row")
+                continue
+            linked.add(module)
             paths = row.get("paths") if isinstance(row.get("paths"), dict) else {}
             link: list[tuple[str, Path]] = []
             for stat in LINK_STATS:
@@ -273,11 +282,7 @@ def parse_map(
             if not link:
                 problems.append(f"{where}: its radio link row has nowhere to go")
                 continue
-            g = group(module, device_id)
-            if g["link"]:
-                problems.append(f"{where}: radio link mapped twice to one device")
-                continue
-            g["link"] = tuple(link)
+            group(module, device_id)["link"] = tuple(link)
             continue
 
         number = _int(row.get("channel"))
