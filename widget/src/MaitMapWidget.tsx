@@ -7,8 +7,8 @@ import RemoteComponentWrapper from "customer_site/RemoteComponentWrapper";
 import { useRemoteParams } from "customer_site/useRemoteParams";
 import { useAgentChannel, useDooverClient, useMultiAgentAggregates } from "doover-js/react";
 
-import { Button, Card, Dot, Message, SiteLink, Spinner } from "./components/ui";
-import { fmtAgo, fmtClock } from "./lib/format";
+import { Button, Card, Message, SiteLink, Spinner } from "./components/ui";
+import { fmtClock } from "./lib/format";
 import {
   CONVERSIONS,
   buildCatalogue,
@@ -43,7 +43,6 @@ interface DeploymentConfig {
   applications?: Record<string, Dict & { DEVICE_MAP?: Record<string, { name?: string; display_name?: string }> }>;
 }
 
-const STALE_MIN = 120;
 
 function useNow(intervalMs = 30_000) {
   const [now, setNow] = useState(() => Date.now());
@@ -102,10 +101,8 @@ function MapInner({ uiElement }: WidgetProps) {
     return buildCatalogue(deviceMap, deps, tv, agentId, stateChannel);
   }, [deviceIds, deviceMap, deployments.aggregatesByAgent, tags.aggregatesByAgent, agentId, stateChannel]);
 
-  // The saved map, and the bridge's tags (when each module was last heard).
+  // The saved map.
   const saved = useAgentChannel<Dict>(agentId, mapChannel);
-  const ownTags = useAgentChannel<Record<string, Dict>>(agentId, "tag_values");
-  const bridgeTags = (appKey && ownTags.data?.[appKey]) || {};
 
   const savedDoc = isSaved(saved.data) ? saved.data : undefined;
   const legacy = !savedDoc && Array.isArray(bridgeCfg?.modules) && (bridgeCfg!.modules as unknown[]).length > 0;
@@ -185,11 +182,6 @@ function MapInner({ uiElement }: WidgetProps) {
     );
   }
 
-  const heard = (module: number) => {
-    const v = bridgeTags[`m${module}_heard`];
-    return typeof v === "number" ? v : undefined;
-  };
-
   return (
     <div className="flex flex-col gap-4 text-foreground">
       <p className="m-0 text-sm text-muted-foreground">
@@ -244,8 +236,6 @@ function MapInner({ uiElement }: WidgetProps) {
           module={module}
           rows={current}
           catalogue={catalogue}
-          heard={heard(module)}
-          now={now}
           problems={rowProblems}
           onEdit={edit}
           modules={modules}
@@ -317,8 +307,6 @@ function ModuleCard({
   module,
   rows,
   catalogue,
-  heard,
-  now,
   problems,
   onEdit,
   modules,
@@ -326,17 +314,13 @@ function ModuleCard({
   module: number;
   rows: Row[];
   catalogue: DeviceEntry[];
-  heard: number | undefined;
-  now: number;
   problems: (i: number) => Problem[];
   onEdit: (fn: (rows: Row[]) => Row[]) => void;
   modules: number[];
 }) {
   const mine = rows.map((r, i) => [r, i] as const).filter(([r]) => r.module === module);
-  const devices = [...new Set(mine.map(([r]) => r.device).filter(Boolean))].map((d) => findDevice(catalogue, d)?.name ?? d);
   const channelRows = mine.filter(([r]) => !isLink(r));
   const lastDevice = channelRows.length ? channelRows[channelRows.length - 1][0].device : mine.find(([r]) => isLink(r))?.[0].device ?? "";
-  const stale = heard != null && now - heard > STALE_MIN * 60_000;
   const [number, setNumber] = useState(String(module));
   useEffect(() => setNumber(String(module)), [module]);
 
@@ -359,7 +343,7 @@ function ModuleCard({
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+      <div className="flex items-center gap-3 px-4 py-3">
         <label className="flex items-center gap-1.5 text-sm font-semibold">
           Module
           <input
@@ -373,12 +357,7 @@ function ModuleCard({
             aria-label="Module number"
           />
         </label>
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Dot colour={heard == null ? "#9ca3af" : stale ? "#d97706" : "var(--color-run)"} />
-          {heard == null ? "Not heard yet" : `Heard ${fmtAgo(heard, now)}`}
-        </span>
-        {devices.length > 0 && <span className="truncate text-xs text-muted-foreground">→ {devices.join(", ")}</span>}
-        <span className="ml-auto flex items-center gap-1">
+        <span className="ml-auto flex shrink-0 items-center gap-1">
           <Button size="sm" variant="ghost" onClick={() => insertAfterModule(emptyChannel(module, lastDevice))}>
             Add channel
           </Button>

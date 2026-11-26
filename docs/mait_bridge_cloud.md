@@ -38,8 +38,7 @@ input of one app on one device:
 A module can be split across several devices (one row per channel), and several modules can feed one
 device. The page flags a channel mapped twice, an input fed twice, an input whose app has been removed, and
 devices whose controls can't reach the radios yet because the bridge isn't subscribed to their
-`io_commands`. **Inputs with nothing mapped to them** lists what is still unwired on each device. Each
-module shows when it was last heard.
+`io_commands`. **Inputs with nothing mapped to them** lists what is still unwired on each device.
 
 To build a new app for a device on a MAIT site, or change one so the bridge can feed it, read
 [Building apps for a MAIT site](building-apps-for-a-mait-site.md).
@@ -93,7 +92,7 @@ as `valve_1` is commanded as `valve_1`.
 - **Last Uplink**, **Modules** (heard of expected, and how many are stale), **Devices Mapped**.
 - **Last Downlink** and what it was.
 - **Map From**: the mapping page, or the old Module Map in config.
-- **Module Mapping**: the mapping page above, with each module's last-heard time.
+- **Module Mapping**: the mapping page above.
 - A warning lists problems: a module that is not in the map, a device the app may not write to, a command
   for an output that is not mapped.
 
